@@ -1,0 +1,13 @@
+import puppeteer from 'puppeteer-core';
+const b = await puppeteer.launch({executablePath:'/Applications/Google Chrome.app/Contents/MacOS/Google Chrome', headless:'new'});
+const p = await b.newPage();
+await p.setViewport({width:1440,height:900,deviceScaleFactor:2});
+await p.goto('http://localhost:5199/', {waitUntil:'networkidle0'});
+await new Promise(r=>setTimeout(r,2500));
+await p.screenshot({path:'s-hero.png'});
+const full = await p.evaluate(()=>document.body.scrollHeight);
+console.log('height', full);
+const ids = await p.evaluate(()=>[...document.querySelectorAll('section[id]')].map(s=>s.id+':'+Math.round(s.getBoundingClientRect().top+scrollY)));
+console.log(ids.join(' '));
+await p.screenshot({path:'s-full.png', fullPage:true});
+await b.close();

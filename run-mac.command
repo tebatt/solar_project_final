@@ -1,0 +1,40 @@
+#!/bin/bash
+# Utu — run backend (FastAPI :8000) + frontend (Vite :5173) on macOS
+cd "$(dirname "$0")"
+ROOT="$(pwd)"
+export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
+
+command -v python3 >/dev/null || { echo "❌ python3 غير مثبت"; read -p "Enter للإغلاق"; exit 1; }
+command -v npm >/dev/null || { echo "❌ Node.js/npm غير مثبت"; read -p "Enter للإغلاق"; exit 1; }
+
+echo "== Backend =="
+cd "$ROOT/backend"
+if [ ! -x .venv-mac/bin/python ]; then
+  python3 -m venv .venv-mac || exit 1
+  .venv-mac/bin/pip install -q --upgrade pip
+  .venv-mac/bin/pip install -q -r requirements.txt || { read -p "pip فشل - Enter"; exit 1; }
+fi
+[ -f .jwt_secret ] || .venv-mac/bin/python -c "import secrets;print(secrets.token_urlsafe(48))" > .jwt_secret
+export JWT_SECRET_KEY="$(cat .jwt_secret)"
+export APP_ENV=development
+# Show the demo ("بيانات توضيحية") customer reviews (backend and frontend flags).
+export UTU_DEMO_REVIEW_PREVIEW_ENABLED=true
+export VITE_DEMO_REVIEW_PREVIEW_ENABLED=true
+lsof -ti tcp:8000 | xargs kill 2>/dev/null
+.venv-mac/bin/uvicorn main:app --reload --port 8000 > "$ROOT/backend.log" 2>&1 &
+BACK_PID=$!
+for i in $(seq 1 30); do curl -s -o /dev/null http://127.0.0.1:8000/docs && break; sleep 1; done
+if [ ! -f .seeded_real ] && [ -f solar_test.db ]; then
+  .venv-mac/bin/python seed_real_companies_test.py && touch .seeded_real
+fi
+
+echo "== Frontend =="
+cd "$ROOT/frontend"
+if [ ! -f node_modules/.mac-installed ]; then
+  [ -d node_modules ] && mv node_modules "node_modules_windows_backup_$(date +%s)"
+  npm install || { read -p "npm فشل - Enter"; exit 1; }
+  touch node_modules/.mac-installed
+fi
+trap "kill $BACK_PID 2>/dev/null" EXIT
+echo "✅ Backend: http://localhost:8000/docs   Frontend: http://localhost:5173"
+npm run dev

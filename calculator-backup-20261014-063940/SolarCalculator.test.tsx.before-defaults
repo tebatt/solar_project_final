@@ -1,0 +1,371 @@
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import '@testing-library/jest-dom/vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { LanguageProvider } from '../../i18n/LanguageProvider';
+import { QuoteRequestProvider } from '../../state/QuoteRequestProvider';
+import { AssessmentProvider } from '../../state/AssessmentProvider';
+import { SolarCalculator } from './SolarCalculator';
+import { StepSystem } from '../rfq/StepSystem';
+import { CalculatorSection } from '../../sections/CalculatorSection';
+
+afterEach(() => {
+  cleanup();
+  vi.restoreAllMocks();
+  vi.unstubAllGlobals();
+  window.location.hash = '';
+});
+
+beforeEach(() => {
+  localStorage.clear();
+  vi.spyOn(window, 'scrollTo').mockImplementation(() => undefined);
+});
+
+describe('SolarCalculator quote handoff', () => {
+  it('shows the direct-request or smart-calculator choice banner', () => {
+    vi.stubGlobal(
+      'IntersectionObserver',
+      vi.fn(() => ({ observe: vi.fn(), unobserve: vi.fn(), disconnect: vi.fn() })),
+    );
+    render(
+      <LanguageProvider>
+        <QuoteRequestProvider>
+          <AssessmentProvider>
+            <CalculatorSection />
+          </AssessmentProvider>
+        </QuoteRequestProvider>
+      </LanguageProvider>,
+    );
+
+    expect(screen.getByText(/You can fill in a request directly/)).toBeInTheDocument();
+  });
+
+  it('starts a new quote request pre-filled with the calculator result', async () => {
+    localStorage.setItem('utu-quote-draft', JSON.stringify({ systemKWp: 20, panelCount: 30 }));
+    localStorage.setItem('utu-quote-step', '4');
+    render(
+      <LanguageProvider>
+        <QuoteRequestProvider>
+          <AssessmentProvider>
+            <SolarCalculator />
+            <StepSystem errors={{}} />
+          </AssessmentProvider>
+        </QuoteRequestProvider>
+      </LanguageProvider>,
+    );
+
+    expect(screen.getByText('Nothing to size yet')).toBeInTheDocument();
+    expect(screen.getByText('Split AC')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Load demo values' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Calculate My System & Request Quotes' }));
+
+    await waitFor(() => expect(window.location.hash).toBe('#/request'));
+    const draft = JSON.parse(localStorage.getItem('utu-quote-draft') ?? '{}');
+    expect(draft.fromCalculator).toBe(true);
+    expect(draft.systemKWp).toBeGreaterThan(0);
+    expect(draft.panelCount).toBeGreaterThan(0);
+    expect(draft.calculatorDailyKWh).toBeGreaterThan(0);
+    expect(draft.calculatorPeakAmps).toBeGreaterThan(0);
+    // The old draft's numbers are replaced and the new request starts at step 1.
+    expect(draft.systemKWp).not.toBe(20);
+    expect(localStorage.getItem('utu-quote-step')).toBeNull();
+    expect(await screen.findByText('Calculated daily consumption')).toBeInTheDocument();
+    expect(screen.getByText('Estimated peak load equivalent')).toBeInTheDocument();
+    expect(screen.getByLabelText('System size')).toHaveValue(draft.systemKWp);
+  });
+
+  it('offers a direct RFQ path while the calculator has no load and does not attach calculator data', async () => {
+    render(
+      <LanguageProvider>
+        <QuoteRequestProvider>
+          <AssessmentProvider>
+            <SolarCalculator />
+          </AssessmentProvider>
+        </QuoteRequestProvider>
+      </LanguageProvider>,
+    );
+
+    expect(screen.getByRole('button', { name: 'Calculate My System & Request Quotes' })).toBeDisabled();
+    fireEvent.click(screen.getByRole('button', { name: /Skip calculator and submit a direct request/ }));
+
+    await waitFor(() => expect(window.location.hash).toBe('#/request'));
+    expect(localStorage.getItem('utu-quote-draft')).toBeNull();
+  });
+
+  it('lists standard appliances at zero and calculates immediately when a unit is activated', () => {
+    render(
+      <LanguageProvider>
+        <QuoteRequestProvider>
+          <AssessmentProvider>
+            <SolarCalculator />
+          </AssessmentProvider>
+        </QuoteRequestProvider>
+      </LanguageProvider>,
+    );
+
+    expect(screen.getByText('Nothing to size yet')).toBeInTheDocument();
+    expect(screen.getByText('Split AC')).toBeInTheDocument();
+    expect(screen.getByText('Refrigerator / Freezer')).toBeInTheDocument();
+    expect(screen.getByText('LED Lighting')).toBeInTheDocument();
+    expect(screen.getByText('Television')).toBeInTheDocument();
+    expect(screen.getByText('Water Pump')).toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: 'استمع إلى الإرشادات الصوتية' }).length).toBeGreaterThan(1);
+    expect(document.querySelectorAll('.on-dark.rounded-xl ul > li [role="status"]')).toHaveLength(10);
+    expect(Array.from(document.querySelectorAll('.on-dark.rounded-xl ul > li [role="status"]'))
+      .every((stepperValue) => stepperValue.textContent === '0')).toBe(true);
+    expect(screen.getByRole('button', { name: 'Calculate My System & Request Quotes' })).toBeDisabled();
+    expect(document.querySelectorAll('.on-dark.rounded-xl ul > li p.numeric')).toHaveLength(5);
+    expect(Array.from(document.querySelectorAll('.on-dark.rounded-xl ul > li p.numeric'))
+      .every((dailyValue) => dailyValue.textContent?.trim() === '0 Wh')).toBe(true);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Increase Split AC units' }));
+
+    expect(screen.getByText('Equivalent Amperes / ما يعادل بالأمبير')).toBeInTheDocument();
+    expect(screen.getByText('9,000 Wh')).toBeInTheDocument();
+    expect(screen.getByText('6.5')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Calculate My System & Request Quotes' })).toBeEnabled();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Add another appliance' }));
+    expect(screen.getByText('Evaporative Cooler')).toBeInTheDocument();
+    expect(screen.getByText('2,400 Wh')).toBeInTheDocument();
+    expect(screen.getByText('7.8')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Decrease Evaporative Cooler units' }));
+    expect(screen.getByText('Evaporative Cooler').closest('li')?.querySelector('p.numeric'))
+      .toHaveTextContent('0 Wh');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Remove Evaporative Cooler' }));
+    expect(screen.queryByText('Evaporative Cooler')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Add another appliance' }));
+    expect(screen.getByText('Evaporative Cooler')).toBeInTheDocument();
+  });
+
+  it('clears demo values and restores all default appliances to zero', () => {
+    render(
+      <LanguageProvider>
+        <QuoteRequestProvider>
+          <AssessmentProvider>
+            <SolarCalculator />
+          </AssessmentProvider>
+        </QuoteRequestProvider>
+      </LanguageProvider>,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Load demo values' }));
+    expect(screen.queryByText('Nothing to size yet')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Calculate My System & Request Quotes' })).toBeEnabled();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Reset' }));
+
+    expect(screen.getByText('Nothing to size yet')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Calculate My System & Request Quotes' })).toBeDisabled();
+    expect(document.querySelectorAll('.on-dark.rounded-xl ul > li [role="status"]')).toHaveLength(10);
+    expect(Array.from(document.querySelectorAll('.on-dark.rounded-xl ul > li [role="status"]'))
+      .every((stepperValue) => stepperValue.textContent === '0')).toBe(true);
+    expect(Array.from(document.querySelectorAll('.on-dark.rounded-xl ul > li p.numeric'))
+      .every((dailyValue) => dailyValue.textContent?.trim() === '0 Wh')).toBe(true);
+  });
+
+  it('opens the UTU assessment with the same appliances', async () => {
+    render(
+      <LanguageProvider>
+        <QuoteRequestProvider>
+          <AssessmentProvider>
+            <SolarCalculator />
+          </AssessmentProvider>
+        </QuoteRequestProvider>
+      </LanguageProvider>,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Increase Split AC units' }));
+    fireEvent.click(screen.getByRole('button', { name: 'See UTU assessment' }));
+
+    await waitFor(() => expect(window.location.hash).toBe('#/assessment'));
+    const saved = JSON.parse(localStorage.getItem('utu-assessment-appliances') ?? '[]');
+    expect(saved.length).toBeGreaterThan(0);
+  });
+});
+
+function renderCalculator() {
+  return render(
+    <LanguageProvider>
+      <QuoteRequestProvider>
+        <AssessmentProvider>
+          <SolarCalculator />
+        </AssessmentProvider>
+      </QuoteRequestProvider>
+    </LanguageProvider>,
+  );
+}
+
+/** The list item for the device currently named `name`. */
+const rowOf = (name: string) =>
+  screen.getAllByRole('button', { name: `Rename ${name}` })[0].closest('li') as HTMLElement;
+
+const dailyOf = (row: HTMLElement) => row.querySelector('p.numeric')?.textContent?.trim();
+
+const field = (row: HTMLElement, label: string) =>
+  within(row).getByRole('textbox', { name: label }) as HTMLInputElement;
+
+/** Opens the name field of a row and picks a suggestion (no inputType, as from a datalist). */
+function pickName(current: string, next: string) {
+  fireEvent.click(screen.getAllByRole('button', { name: `Rename ${current}` })[0]);
+  fireEvent.change(screen.getByRole('combobox', { name: 'Device name' }), { target: { value: next } });
+}
+
+/** Opens the name field of a row, types a label and confirms with Enter. */
+function typeName(current: string, next: string) {
+  fireEvent.click(screen.getAllByRole('button', { name: `Rename ${current}` })[0]);
+  const input = screen.getByRole('combobox', { name: 'Device name' });
+  fireEvent.input(input, { target: { value: next }, inputType: 'insertText' });
+  fireEvent.keyDown(input, { key: 'Enter' });
+}
+
+describe('SolarCalculator smart devices', () => {
+  it('adds an evaporative cooler with its defaults, which can be turned off and removed', () => {
+    renderCalculator();
+    fireEvent.click(screen.getByRole('button', { name: 'Add another appliance' }));
+
+    const row = rowOf('Evaporative Cooler');
+    expect(field(row, 'Power of Evaporative Cooler in watts')).toHaveValue('300');
+    expect(field(row, 'Evaporative Cooler units, value')).toHaveValue('1');
+    expect(field(row, 'Evaporative Cooler hours per day, value')).toHaveValue('8');
+    expect(dailyOf(row)).toBe('2,400 Wh');
+
+    fireEvent.click(within(row).getByRole('button', { name: 'Decrease Evaporative Cooler units' }));
+    expect(dailyOf(row)).toBe('0 Wh');
+    fireEvent.click(within(row).getByRole('button', { name: 'Remove Evaporative Cooler' }));
+    expect(screen.queryByText('Evaporative Cooler')).not.toBeInTheDocument();
+  });
+
+  it('keeps added rows identical to standard rows, each with a rename button', () => {
+    renderCalculator();
+    fireEvent.click(screen.getByRole('button', { name: 'Add another appliance' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Add another appliance' }));
+
+    expect(screen.getByText('Ceiling Fan')).toBeInTheDocument();
+    expect(document.querySelector('select')).toBeNull();
+    const rows = document.querySelectorAll('.on-dark.rounded-xl ul > li');
+    expect(rows).toHaveLength(7);
+    rows.forEach((row) => {
+      expect(within(row as HTMLElement).getByRole('button', { name: /^Rename / })).toBeInTheDocument();
+    });
+  });
+
+  it('replaces the values when another device is picked instead of adding to them', () => {
+    renderCalculator();
+    fireEvent.click(screen.getByRole('button', { name: 'Add another appliance' }));
+
+    pickName('Evaporative Cooler', 'Electric Iron');
+    let row = rowOf('Electric Iron');
+    expect(field(row, 'Power of Electric Iron in watts')).toHaveValue('1500');
+    expect(field(row, 'Electric Iron hours per day, value')).toHaveValue('0.5');
+    expect(dailyOf(row)).toBe('750 Wh');
+
+    pickName('Electric Iron', 'Laptop');
+    row = rowOf('Laptop');
+    expect(field(row, 'Power of Laptop in watts')).toHaveValue('65');
+    expect(field(row, 'Laptop hours per day, value')).toHaveValue('6');
+    expect(field(row, 'Laptop units, value')).toHaveValue('1');
+    expect(dailyOf(row)).toBe('390 Wh');
+  });
+
+  it('does not apply a device while a longer name is still being typed', () => {
+    renderCalculator();
+    fireEvent.click(screen.getByRole('button', { name: 'Add another appliance' }));
+
+    typeName('Evaporative Cooler', 'Laptop stand');
+    const row = rowOf('Laptop stand');
+    expect(field(row, 'Power of Laptop stand in watts')).toHaveValue('300');
+    expect(dailyOf(row)).toBe('2,400 Wh');
+  });
+
+  it('keeps two rows of the same device independent', () => {
+    renderCalculator();
+    fireEvent.click(screen.getByRole('button', { name: 'Add another appliance' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Add another appliance' }));
+    pickName('Evaporative Cooler', 'Ceiling Fan');
+    expect(screen.getAllByRole('button', { name: 'Rename Ceiling Fan' })).toHaveLength(2);
+
+    typeName('Ceiling Fan', 'Bedroom fan');
+    const bedroom = rowOf('Bedroom fan');
+    fireEvent.change(field(bedroom, 'Power of Bedroom fan in watts'), { target: { value: '100' } });
+    expect(dailyOf(bedroom)).toBe('800 Wh');
+
+    const other = rowOf('Ceiling Fan');
+    expect(field(other, 'Power of Ceiling Fan in watts')).toHaveValue('75');
+    expect(dailyOf(other)).toBe('600 Wh');
+  });
+
+  it('uses a custom name as a label only and passes it to the assessment', async () => {
+    renderCalculator();
+    fireEvent.click(screen.getByRole('button', { name: 'Add another appliance' }));
+
+    typeName('Evaporative Cooler', 'Heater');
+    const row = rowOf('Heater');
+    expect(field(row, 'Power of Heater in watts')).toHaveValue('300');
+    fireEvent.change(field(row, 'Power of Heater in watts'), { target: { value: '2000' } });
+    fireEvent.change(field(row, 'Heater hours per day, value'), { target: { value: '1.5' } });
+    expect(dailyOf(row)).toBe('3,000 Wh');
+
+    fireEvent.click(screen.getByRole('button', { name: 'See UTU assessment' }));
+    await waitFor(() => expect(window.location.hash).toBe('#/assessment'));
+    const saved = JSON.parse(localStorage.getItem('utu-assessment-appliances') ?? '[]');
+    const heater = saved.find((a: { name: { en: string } }) => a.name.en === 'Heater');
+    expect(heater).toMatchObject({ watts: 2000, hours: 1.5, units: 1, name: { en: 'Heater', ar: 'Heater' } });
+  });
+
+  it('keeps the values of a renamed standard row and restores the name when cleared', () => {
+    renderCalculator();
+    fireEvent.click(screen.getByRole('button', { name: 'Load demo values' }));
+
+    typeName('Split AC', 'Living room AC');
+    const row = rowOf('Living room AC');
+    expect(field(row, 'Power of Living room AC in watts')).toHaveValue('1500');
+    expect(field(row, 'Living room AC units, value')).toHaveValue('2');
+    expect(dailyOf(row)).toBe('18,000 Wh');
+
+    typeName('Living room AC', '');
+    expect(rowOf('Split AC')).toBe(row);
+    expect(dailyOf(row)).toBe('18,000 Wh');
+  });
+
+  it('rejects invalid typed values without changing the estimate', () => {
+    renderCalculator();
+    fireEvent.click(screen.getByRole('button', { name: 'Increase Split AC units' }));
+    const row = rowOf('Split AC');
+    expect(dailyOf(row)).toBe('9,000 Wh');
+    expect(screen.getByText('6.5')).toBeInTheDocument();
+
+    const cases: [string, string, string][] = [
+      ['Power of Split AC in watts', '-5', 'Value cannot be negative.'],
+      ['Split AC units, value', '1.5', 'Quantity must be a whole number.'],
+      ['Split AC hours per day, value', '30', 'Hours must be between 0 and 24.'],
+      ['Split AC hours per day, value', '', 'Enter a number.'],
+      ['Power of Split AC in watts', '25000', 'Maximum is 20000.'],
+    ];
+    for (const [label, value, message] of cases) {
+      const input = field(row, label);
+      const before = input.value;
+      fireEvent.change(input, { target: { value } });
+      expect(within(row).getByRole('alert')).toHaveTextContent(message);
+      expect(dailyOf(row)).toBe('9,000 Wh');
+      expect(screen.getByText('6.5')).toBeInTheDocument();
+      fireEvent.blur(input);
+      expect(input).toHaveValue(before);
+      expect(within(row).queryByRole('alert')).not.toBeInTheDocument();
+    }
+  });
+
+  it('accepts Arabic-Indic digits and shows Arabic validation messages', () => {
+    localStorage.setItem('utu-lang', 'ar');
+    renderCalculator();
+    const row = screen.getByRole('button', { name: 'تغيير اسم مكيّف سبليت' }).closest('li') as HTMLElement;
+
+    fireEvent.change(field(row, 'عدد مكيّف سبليت، القيمة'), { target: { value: '٢' } });
+    expect(dailyOf(row)).toBe('18,000 Wh');
+
+    fireEvent.change(field(row, 'قدرة مكيّف سبليت بالواط'), { target: { value: '-1' } });
+    expect(within(row).getByRole('alert')).toHaveTextContent('لا يمكن أن تكون القيمة سالبة.');
+    expect(dailyOf(row)).toBe('18,000 Wh');
+  });
+});

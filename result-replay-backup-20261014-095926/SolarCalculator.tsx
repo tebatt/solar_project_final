@@ -1,0 +1,319 @@
+import { useRef, useState } from 'react';
+import { Button } from '../ui/Button';
+import { VoiceGuideButton } from '../ui/VoiceGuideButton';
+import { Icon } from '../icons/Icon';
+import { cn } from '../../lib/cn';
+import { useReducedMotion as useMotionReduced } from 'framer-motion';
+import AnimatedContent from '../reactbits/AnimatedContent';
+import { ApplianceRow } from './ApplianceRow';
+import { ResultStat } from './ResultStat';
+import { ASSUMPTIONS, useSolarEstimate } from './useSolarEstimate';
+import {
+  defaultAppliances,
+  findApplianceDefaults,
+  newAddedAppliance,
+  type Appliance,
+} from '../../data/content';
+import { fmt, useLanguage } from '../../i18n/LanguageProvider';
+import { useQuoteRequest } from '../../state/QuoteRequestProvider';
+import { useAssessment } from '../../state/AssessmentProvider';
+import { estimateToQuoteSystem } from '../../assessment/utuAssessment';
+import { paths } from '../../routes/useHashRoute';
+
+/**
+ * The smart energy calculator panel.
+ *
+ * Starts with the standard household appliances visible but inactive. Users
+ * can activate a load with its unit stepper or load the example configuration.
+ * "Add another device" always works: it adds the next catalog device with its
+ * smart defaults, and any row can be renamed or switched to another device.
+ */
+/**
+ * Animated Content (React Bits) settings for the result cards: 20px rise and
+ * fade over 450ms, 120ms apart, smooth ease-out. Under reduced motion the
+ * cards appear at once, without movement.
+ */
+function resultReveal(order: number, reduced: boolean | null) {
+  return reduced
+    ? { distance: 0, duration: 0, animateOpacity: false }
+    : { distance: 20, duration: 0.45, delay: order * 0.12, ease: 'power2.out', initialOpacity: 0 };
+}
+
+export function SolarCalculator({
+  dashboardLayout = false,
+  choiceBanner,
+}: {
+  dashboardLayout?: boolean;
+  choiceBanner?: string;
+}) {
+  const { t } = useLanguage();
+  const { startFromSystem } = useQuoteRequest();
+  const { start: startAssessment } = useAssessment();
+  const [appliances, setAppliances] = useState<Appliance[]>(() =>
+    defaultAppliances.map((appliance) => ({ ...appliance, name: { ...appliance.name } })),
+  );
+  const [activeId, setActiveId] = useState(defaultAppliances[0]?.id ?? '');
+
+  const estimate = useSolarEstimate(appliances);
+  // The result cards mount (and reveal) when results first become valid;
+  // bumping this key replays the reveal when demo values are loaded.
+  const [revealKey, setRevealKey] = useState(0);
+  const prefersReducedMotion = useMotionReduced();
+  const revealProps = (order: number) => resultReveal(order, prefersReducedMotion);
+  const isEmpty = estimate.dailyWh === 0;
+
+  /** Each row is updated by its own id, so two rows of one device stay independent. */
+  const update = (next: Appliance) => {
+    setAppliances((list) => list.map((appliance) => {
+      if (appliance.id !== next.id) return appliance;
+      // Switching a device off clears its hours.
+      if (appliance.units > 0 && next.units === 0) return { ...next, hours: 0 };
+      // Switching it on fills in typical hours, but never over hours the user typed.
+      if (appliance.units === 0 && next.units > 0 && next.hours === 0) {
+        return { ...next, hours: findApplianceDefaults(next.kind ?? next.id)?.hours ?? 1 };
+      }
+      return next;
+    }));
+  };
+
+  const addedCount = useRef(0);
+  const addAppliance = () => {
+    addedCount.current += 1;
+    const next = newAddedAppliance(
+      `added-${Date.now()}-${addedCount.current}`,
+      appliances.map((a) => a.kind ?? a.id),
+    );
+    setAppliances((list) => [...list, next]);
+    setActiveId(next.id);
+  };
+
+  const loadDemoValues = () => {
+    // Fresh results: replay the reveal. Typing into a row never does this.
+    setRevealKey((key) => key + 1);
+    const demo = defaultAppliances.map((appliance) => ({ ...appliance }));
+    setAppliances(demo);
+    setActiveId(demo[0]?.id ?? '');
+  };
+
+  const resetAppliances = () => {
+    setAppliances(defaultAppliances.map((appliance) => ({ ...appliance, units: 0, hours: 0 })));
+    setActiveId(defaultAppliances[0]?.id ?? '');
+  };
+
+  const removeAppliance = (id: string) => {
+    setAppliances((list) => list.filter((appliance) => appliance.id !== id));
+    if (activeId === id) {
+      setActiveId(appliances.find((appliance) => appliance.id !== id)?.id ?? '');
+    }
+  };
+
+  const goTo = (hash: string) => {
+    window.location.hash = hash;
+    window.scrollTo({ top: 0, behavior: 'auto' });
+  };
+
+  /** Send this result to the quote request so nothing is retyped (still editable there). */
+  const requestQuotes = () => {
+    startFromSystem(estimateToQuoteSystem(estimate));
+    goTo(paths.request);
+  };
+
+  /** Open the UTU assessment with exactly these appliances. */
+  const openAssessment = () => {
+    startAssessment(appliances);
+    goTo(paths.assessment);
+  };
+
+  const liveGroups = appliances.filter((a) => a.units > 0 && a.hours > 0).length;
+
+  return (
+    <div className={dashboardLayout ? 'contents' : 'on-dark rounded-xl border border-line-on-dark bg-bg-inverse p-4 shadow-panel sm:p-5'}>
+      <div className={dashboardLayout
+        ? 'on-dark rounded-xl border border-line-on-dark bg-bg-inverse p-4 shadow-panel sm:p-5 lg:col-start-2 lg:row-span-2 lg:row-start-1 lg:flex lg:flex-col lg:self-stretch'
+        : ''}>
+        {choiceBanner && (
+          <p className="mb-3 rounded-lg border border-amber-300/30 bg-amber-400/10 px-3 py-2 text-label-sm text-amber-100">
+            {choiceBanner}
+          </p>
+        )}
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="min-w-[11rem] flex-1">
+            <h3 className="text-h4 text-content-on-dark">{t('panel.title')}</h3>
+            <div className="mt-0.5 flex items-center gap-1">
+              <p className="text-label-sm text-content-on-dark-muted">{t('panel.sub')}</p>
+              <VoiceGuideButton text="اختر الأجهزة التي تستخدمها، ثم حدد عدد كل جهاز وساعات تشغيله يومياً." onDark />
+            </div>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={loadDemoValues}
+              className="rounded-full border border-amber-300/40 bg-amber-400/10 px-3 py-1.5 text-label-sm font-semibold text-amber-200 transition-colors hover:border-amber-200/70 hover:bg-amber-400/20"
+            >
+              {t('panel.tag')}
+            </button>
+            <button
+              type="button"
+              onClick={resetAppliances}
+              className="rounded-full border border-line-on-dark bg-transparent px-3 py-1.5 text-label-sm font-semibold text-content-on-dark-muted transition-colors hover:border-panel-400 hover:bg-bg-panel-raised hover:text-content-on-dark"
+            >
+              {t('panel.reset')}
+            </button>
+          </div>
+        </div>
+
+        <ul className={cn('mt-3 flex flex-col gap-2', dashboardLayout && 'lg:flex-1 lg:justify-between')}>
+          {appliances.map((a) => (
+            <ApplianceRow
+              key={a.id}
+              appliance={a}
+              active={a.id === activeId}
+              onChange={update}
+              onFocus={() => setActiveId(a.id)}
+              onRemove={() => removeAppliance(a.id)}
+            />
+          ))}
+        </ul>
+
+        <button
+          type="button"
+          onClick={addAppliance}
+          className="mt-2 flex w-full items-center justify-center gap-2 rounded-[12px] border-[1.5px] border-dashed border-line-on-dark py-2.5 text-label text-solar-300 transition-colors hover:border-solar-400 hover:bg-bg-panel-deep"
+        >
+          <Icon name="plus" size={16} />
+          {t('panel.add')}
+        </button>
+      </div>
+
+      <div className={dashboardLayout
+        ? 'on-dark rounded-2xl border border-amber-500/20 bg-slate-900/60 p-4 backdrop-blur-md sm:p-5 lg:col-start-1 lg:row-start-2 lg:self-stretch'
+        : ''}>
+        <hr className={dashboardLayout ? 'mb-4 border-line-on-dark lg:hidden' : 'my-4 border-line-on-dark'} />
+
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h4 className="eyebrow text-content-on-dark-muted">{t('panel.resultHead')}</h4>
+          <p className="text-label-sm text-content-on-dark-muted">
+            {t('panel.basis', { h: ASSUMPTIONS.PEAK_SUN_HOURS })}
+          </p>
+        </div>
+
+        {isEmpty ? (
+          <div
+            role="status"
+            className="mt-3 rounded-lg border border-dashed border-line-on-dark bg-bg-panel-deep px-4 py-5 text-center"
+          >
+            <Icon
+              name="calculator"
+              size={22}
+              className="mx-auto text-content-on-dark-muted"
+              aria-hidden="true"
+            />
+            <p className="mt-2 text-label text-content-on-dark">{t('empty.title')}</p>
+            <p className="mx-auto mt-1 max-w-md text-body-sm text-content-on-dark-muted">
+              {t('empty.body')}
+            </p>
+          </div>
+        ) : (
+          <div
+            key={revealKey}
+            className={cn(
+              'mt-3 grid grid-cols-2 gap-2.5 sm:grid-cols-3',
+              dashboardLayout ? 'lg:grid-cols-2' : 'lg:grid-cols-5',
+            )}
+          >
+            {/* Layout order is unchanged; `revealDelay` sets the reveal order:
+                system size, panels, peak load, battery, daily use. */}
+            <AnimatedContent {...revealProps(2)}>
+              <ResultStat
+                icon="zap"
+                label={t('res.amps')}
+                value={fmt.dec(estimate.peakLoadAmps)}
+                unit="A"
+                note={t('res.ampsNote')}
+                className="h-full"
+              />
+            </AnimatedContent>
+            <AnimatedContent {...revealProps(4)}>
+              <ResultStat
+                icon="battery"
+                label={t('res.usage')}
+                value={fmt.dec(estimate.dailyKWh)}
+                unit={t('res.unitKwhDay')}
+                note={t('res.usageNote', { n: liveGroups })}
+                className="h-full"
+              />
+            </AnimatedContent>
+            <AnimatedContent
+              {...revealProps(0)}
+              className={cn('col-span-2 sm:col-span-1', dashboardLayout && 'lg:col-span-2')}
+            >
+              <ResultStat
+                icon="solar-panel"
+                label={t('res.size')}
+                value={fmt.dec(estimate.systemKWp)}
+                unit={t('res.unitKwp')}
+                note={t('res.sizeNote', { n: estimate.panelCount, w: ASSUMPTIONS.PANEL_WATTS })}
+                emphasis
+                className="h-full"
+              />
+            </AnimatedContent>
+            <AnimatedContent {...revealProps(3)}>
+              <ResultStat
+                icon="battery"
+                label={t('res.battery')}
+                value={fmt.dec(estimate.batteryKWh)}
+                unit={t('res.unitKwh')}
+                note={t('res.batteryNote', { n: Math.round(estimate.outageHours) })}
+                className="h-full"
+              />
+            </AnimatedContent>
+            <AnimatedContent {...revealProps(1)}>
+              <ResultStat
+                icon="sun"
+                label={t('res.panels')}
+                value={fmt.int(estimate.panelCount)}
+                unit={t('res.unitPanels')}
+                note={t('res.panelsNote', { w: ASSUMPTIONS.PANEL_WATTS })}
+                className="h-full"
+              />
+            </AnimatedContent>
+          </div>
+        )}
+
+        <div className="mt-4 flex flex-wrap items-center gap-2.5 sm:gap-3">
+          <Button
+            variant="primary"
+            size="md"
+            className="transition-all duration-200 motion-safe:hover:-translate-y-0.5 hover:shadow-lg"
+            onClick={requestQuotes}
+            disabled={isEmpty}
+          >
+            {t('panel.btn')}
+          </Button>
+          {isEmpty && (
+            <button
+              type="button"
+              onClick={() => goTo(paths.request)}
+              className="inline-flex min-h-10 items-center gap-2 rounded-full border border-amber-300/40 bg-amber-400/10 px-4 py-2 text-label font-semibold text-amber-200 transition-all duration-200 hover:-translate-y-0.5 hover:border-amber-200/70 hover:bg-amber-400/20"
+            >
+              {t('panel.directRequest')}
+              <Icon name="arrow-right" size={16} className="rtl:rotate-180" />
+            </button>
+          )}
+          <Button
+            variant="onDark"
+            size="md"
+            className="transition-all duration-200 motion-safe:hover:-translate-y-0.5 hover:border-amber-200/50 hover:shadow-lg"
+            onClick={openAssessment}
+            disabled={isEmpty}
+          >
+            {t('panel.assessCta')}
+          </Button>
+          <p className="min-w-[12rem] flex-1 text-label-sm text-content-on-dark-muted">
+            {t('panel.disclaimer')}
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}

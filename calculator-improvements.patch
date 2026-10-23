@@ -1,0 +1,1561 @@
+diff -ruN a/src/components/calculator/ApplianceRow.tsx b/src/components/calculator/ApplianceRow.tsx
+--- a/src/components/calculator/ApplianceRow.tsx	2026-10-14 12:11:02.383059579 +0000
++++ b/src/components/calculator/ApplianceRow.tsx	2026-10-14 12:11:02.391038823 +0000
+@@ -1,16 +1,32 @@
++import { useEffect, useId, useRef, useState, type ChangeEvent } from 'react';
+ import { cn } from '../../lib/cn';
+ import { Icon } from '../icons/Icon';
+ import { Stepper } from './Stepper';
++import { NumberField } from './NumberField';
+ import { applianceDailyWh } from './useSolarEstimate';
+ import { fmt, useLanguage } from '../../i18n/LanguageProvider';
+-import type { Appliance } from '../../data/content';
++import {
++  applianceCatalog,
++  findApplianceByName,
++  findApplianceDefaults,
++  withApplianceKind,
++  type Appliance,
++} from '../../data/content';
++
++type FieldKey = 'watts' | 'units' | 'hours';
++const FIELD_ORDER: FieldKey[] = ['watts', 'units', 'hours'];
+ 
+ /**
+  * One electrical load.
+  *
+  * Cause and effect stay on one line: the steppers on the reading-start side,
+  * the resulting daily energy at the end, so changing hours visibly moves the
+- * number beside it rather than only the totals further down.
++ * number beside it rather than only the totals further down. On phones the
++ * steppers drop to their own full-width line under the name.
++ *
++ * The name is a button on every row: clicking it opens a field with the
++ * catalog names as suggestions. Picking one applies that device's defaults;
++ * any other text is only a label and leaves the values alone.
+  */
+ export function ApplianceRow({
+   appliance,
+@@ -27,17 +43,22 @@
+ }) {
+   const { t, pick } = useLanguage();
+   const daily = applianceDailyWh(appliance);
+-  const name = pick(appliance.name);
++  const name = pick(appliance.name) || t('row.unnamed');
+ 
+   const unitsOf = t('row.unitsOf', { n: name });
+   const hoursOf = t('row.hoursOf', { n: name });
+ 
++  const [errors, setErrors] = useState<Partial<Record<FieldKey, string | null>>>({});
++  const setError = (field: FieldKey) => (message: string | null) =>
++    setErrors((prev) => (prev[field] === message ? prev : { ...prev, [field]: message }));
++  const firstError = FIELD_ORDER.map((field) => errors[field]).find(Boolean);
++
+   return (
+     <li
+       onFocusCapture={onFocus}
+       onMouseEnter={onFocus}
+       className={cn(
+-        'flex flex-wrap items-center gap-2 rounded-[12px] border p-2 transition-colors',
++        'flex flex-wrap items-center gap-x-3 gap-y-2 rounded-[12px] border px-3 py-2.5 transition-colors',
+         active
+           ? 'border-[1.5px] border-line-brand bg-bg-panel-raised'
+           : 'border-line-on-dark bg-bg-panel-deep',
+@@ -46,46 +67,64 @@
+       <span
+         aria-hidden="true"
+         className={cn(
+-          'grid h-10 w-10 shrink-0 place-items-center rounded-[11px] bg-bg-panel-raised',
++          'grid h-9 w-9 shrink-0 place-items-center rounded-[10px] bg-bg-panel-raised',
+           active ? 'text-solar-300' : 'text-dusk-200',
+         )}
+       >
+-        <Icon name={appliance.icon} size={20} />
++        <Icon name={appliance.icon} size={18} />
+       </span>
+ 
+-      <div className="min-w-[8rem] flex-1">
+-        <p className="text-label text-content-on-dark">{name}</p>
+-        <p className="text-label-sm text-content-on-dark-muted">
+-          <span className="numeric">{fmt.int(appliance.watts)}</span> {t('row.each')}
++      <div className="min-w-[5.5rem] flex-1 sm:min-w-[7rem]">
++        <ApplianceName appliance={appliance} name={name} onChange={onChange} />
++        <p className="whitespace-nowrap text-label-sm text-content-on-dark-muted">
++          <span className="inline-flex rounded-md border border-transparent transition-colors focus-within:border-line-brand">
++            <NumberField
++              value={appliance.watts}
++              max={20000}
++              label={t('row.watts', { n: name })}
++              onErrorChange={setError('watts')}
++              onChange={(watts) => onChange({ ...appliance, watts })}
++              className="w-12 text-label-sm text-content-on-dark-muted focus:text-content-on-dark ltr:text-left rtl:text-right"
++            />
++          </span>{' '}
++          {t('row.each')}
+         </p>
+       </div>
+ 
+-      <Stepper
+-        label={t('row.units')}
+-        fullLabel={unitsOf}
+-        value={appliance.units}
+-        min={0}
+-        max={40}
+-        voiceGuide={`الرجاء تحديد عدد أجهزة ${name} التي ترغب في تشغيلها.`}
+-        decreaseLabel={t('row.decrease', { n: unitsOf })}
+-        increaseLabel={t('row.increase', { n: unitsOf })}
+-        onChange={(units) => onChange({ ...appliance, units })}
+-      />
++      <div className="order-last flex w-full gap-3 sm:order-none sm:w-auto">
++        <Stepper
++          label={t('row.units')}
++          fullLabel={unitsOf}
++          valueLabel={t('row.valueOf', { n: unitsOf })}
++          value={appliance.units}
++          min={0}
++          max={40}
++          integer
++          voiceGuide={`الرجاء تحديد عدد أجهزة ${name} التي ترغب في تشغيلها.`}
++          decreaseLabel={t('row.decrease', { n: unitsOf })}
++          increaseLabel={t('row.increase', { n: unitsOf })}
++          onErrorChange={setError('units')}
++          onChange={(units) => onChange({ ...appliance, units })}
++        />
+ 
+-      <Stepper
+-        label={t('row.hours')}
+-        fullLabel={hoursOf}
+-        value={appliance.hours}
+-        min={0}
+-        max={24}
+-        voiceGuide={`الرجاء تحديد عدد ساعات تشغيل ${name} يومياً.`}
+-        decreaseLabel={t('row.decrease', { n: hoursOf })}
+-        increaseLabel={t('row.increase', { n: hoursOf })}
+-        onChange={(hours) => onChange({ ...appliance, hours })}
+-      />
++        <Stepper
++          label={t('row.hours')}
++          fullLabel={hoursOf}
++          valueLabel={t('row.valueOf', { n: hoursOf })}
++          value={appliance.hours}
++          min={0}
++          max={24}
++          maxMessage="val.hoursMax"
++          voiceGuide={`الرجاء تحديد عدد ساعات تشغيل ${name} يومياً.`}
++          decreaseLabel={t('row.decrease', { n: hoursOf })}
++          increaseLabel={t('row.increase', { n: hoursOf })}
++          onErrorChange={setError('hours')}
++          onChange={(hours) => onChange({ ...appliance, hours })}
++        />
++      </div>
+ 
+-      <div className="w-24 shrink-0 text-end">
+-        <p className={cn('numeric text-label', active ? 'text-solar-300' : 'text-content-on-dark')}>
++      <div className="min-w-[4.5rem] shrink-0 text-end sm:min-w-20">
++        <p className={cn('numeric whitespace-nowrap text-label', active ? 'text-solar-300' : 'text-content-on-dark')}>
+           {fmt.int(daily)} Wh
+         </p>
+         <p className="text-label-sm text-content-on-dark-muted">{t('row.perDay')}</p>
+@@ -94,10 +133,140 @@
+         type="button"
+         onClick={onRemove}
+         aria-label={t('row.remove', { n: name })}
+-        className="grid h-9 w-9 shrink-0 place-items-center rounded-lg text-content-on-dark-muted transition-colors hover:bg-bg-panel-raised hover:text-content-on-dark"
++        className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-content-on-dark-muted transition-colors hover:bg-bg-panel-raised hover:text-content-on-dark"
+       >
+-        <Icon name="x-mark" size={17} />
++        <Icon name="x-mark" size={16} />
+       </button>
++
++      {firstError && (
++        <p role="alert" className="order-last w-full text-label-sm text-danger-300">
++          {firstError}
++        </p>
++      )}
+     </li>
+   );
+ }
++
++/** The row's name: plain text on a button, turning into a field with suggestions. */
++function ApplianceName({
++  appliance,
++  name,
++  onChange,
++}: {
++  appliance: Appliance;
++  name: string;
++  onChange: (next: Appliance) => void;
++}) {
++  const { t, pick } = useLanguage();
++  const listId = useId();
++  const inputRef = useRef<HTMLInputElement>(null);
++  const [editing, setEditing] = useState(false);
++  const [draft, setDraft] = useState('');
++  // Enter closes the field, and the field's blur on the way out must not
++  // apply the same text a second time.
++  const editingRef = useRef(false);
++
++  useEffect(() => {
++    if (editing) {
++      inputRef.current?.focus();
++      inputRef.current?.select();
++    }
++  }, [editing]);
++
++  const open = () => {
++    setDraft(pick(appliance.name));
++    editingRef.current = true;
++    setEditing(true);
++  };
++
++  const finish = (text: string) => {
++    if (!editingRef.current) return;
++    editingRef.current = false;
++    setEditing(false);
++    const typed = text.trim();
++    const kindDefaults = findApplianceDefaults(appliance.kind);
++
++    if (!typed) {
++      onChange({
++        ...appliance,
++        name: kindDefaults ? { ...kindDefaults.name } : { en: '', ar: '' },
++        nameEdited: false,
++      });
++      return;
++    }
++
++    const match = findApplianceByName(typed);
++    if (match && match.id !== appliance.kind) {
++      onChange(withApplianceKind(appliance, match.id));
++      return;
++    }
++    if (match) {
++      onChange({ ...appliance, name: { ...match.name }, nameEdited: false });
++      return;
++    }
++    if (typed !== pick(appliance.name)) {
++      onChange({ ...appliance, name: { en: typed, ar: typed }, nameEdited: true });
++    }
++  };
++
++  const handleChange = (e: ChangeEvent<HTMLInputElement>) => {
++    const text = e.target.value;
++    setDraft(text);
++    // A suggestion picked from the list arrives as one replacement, not as
++    // typed letters, so "Laptop stand" never applies "Laptop" on the way.
++    const inputType = (e.nativeEvent as InputEvent).inputType;
++    if (!inputType || inputType === 'insertReplacementText') {
++      const match = findApplianceByName(text);
++      if (match) {
++        editingRef.current = false;
++        setEditing(false);
++        onChange(
++          match.id === appliance.kind
++            ? { ...appliance, name: { ...match.name }, nameEdited: false }
++            : withApplianceKind(appliance, match.id),
++        );
++      }
++    }
++  };
++
++  if (!editing) {
++    return (
++      <button
++        type="button"
++        onClick={open}
++        aria-label={t('row.rename', { n: name })}
++        className="block max-w-full truncate text-start text-label text-content-on-dark decoration-dotted underline-offset-4 hover:underline"
++      >
++        {name}
++      </button>
++    );
++  }
++
++  return (
++    <>
++      <input
++        ref={inputRef}
++        type="text"
++        list={listId}
++        value={draft}
++        aria-label={t('row.name')}
++        placeholder={t('row.namePh')}
++        autoComplete="off"
++        onChange={handleChange}
++        onBlur={(e) => finish(e.target.value)}
++        onKeyDown={(e) => {
++          if (e.key === 'Enter' || e.key === 'Escape') {
++            e.preventDefault();
++            finish(e.currentTarget.value);
++          }
++        }}
++        className="w-full min-w-0 rounded-md border border-line-brand bg-bg-panel-raised px-2 py-0.5 text-label text-content-on-dark outline-none placeholder:text-content-on-dark-muted"
++      />
++      <datalist id={listId}>
++        {applianceCatalog.map((entry) => (
++          <option key={entry.id} value={pick(entry.name)} />
++        ))}
++      </datalist>
++    </>
++  );
++}
+diff -ruN a/src/components/calculator/NumberField.tsx b/src/components/calculator/NumberField.tsx
+--- a/src/components/calculator/NumberField.tsx	1970-01-01 00:00:00.000000000 +0000
++++ b/src/components/calculator/NumberField.tsx	2026-10-14 12:11:02.390942050 +0000
+@@ -0,0 +1,117 @@
++import { useEffect, useRef, useState } from 'react';
++import { cn } from '../../lib/cn';
++import { useLanguage } from '../../i18n/LanguageProvider';
++import type { TranslationKey } from '../../i18n/translations';
++
++export type ParseResult =
++  | { value: number; error?: undefined }
++  | { value?: undefined; error: TranslationKey; vars?: Record<string, string | number> };
++
++/** Arabic-Indic (٠-٩) and Eastern Arabic-Indic (۰-۹) digits, plus ٫ and `,` as decimal marks. */
++function normalizeDigits(raw: string): string {
++  return raw
++    .replace(/[٠-٩]/g, (d) => String(d.charCodeAt(0) - 0x0660))
++    .replace(/[۰-۹]/g, (d) => String(d.charCodeAt(0) - 0x06f0))
++    .replace(/[٫,]/g, '.')
++    .replace(/−/g, '-')
++    .trim();
++}
++
++/**
++ * Validates typed text for a calculator field. Returns the number, or the
++ * translation key of the first rule it breaks.
++ */
++export function parseNumber(
++  raw: string,
++  { max, integer = false, maxMessage }: { max: number; integer?: boolean; maxMessage?: TranslationKey },
++): ParseResult {
++  const text = normalizeDigits(raw);
++  if (!/^[-+]?(\d+\.?\d*|\.\d+)$/.test(text)) return { error: 'val.number' };
++  const value = Number(text);
++  if (!Number.isFinite(value)) return { error: 'val.number' };
++  if (value < 0) return { error: 'val.negative' };
++  if (integer && !Number.isInteger(value)) return { error: 'val.whole' };
++  if (value > max) return maxMessage ? { error: maxMessage } : { error: 'val.max', vars: { n: max } };
++  return { value };
++}
++
++/**
++ * A typed numeric input.
++ *
++ * The draft text stays local, and only values that pass validation reach
++ * `onChange`, so an invalid value never reaches the calculation. Leaving the
++ * field puts back the last valid value and clears the error.
++ */
++export function NumberField({
++  value,
++  onChange,
++  max,
++  integer = false,
++  maxMessage,
++  label,
++  className,
++  onErrorChange,
++}: {
++  value: number;
++  onChange: (next: number) => void;
++  max: number;
++  integer?: boolean;
++  maxMessage?: TranslationKey;
++  label: string;
++  className?: string;
++  /** Receives the translated message while the draft is invalid, or null. */
++  onErrorChange?: (message: string | null) => void;
++}) {
++  const { t } = useLanguage();
++  const [draft, setDraft] = useState(String(value));
++  const [errorKey, setErrorKey] = useState<{ key: TranslationKey; vars?: Record<string, string | number> } | null>(null);
++  const reportRef = useRef(onErrorChange);
++  reportRef.current = onErrorChange;
++
++  // A change from outside (stepper, new device kind, reset) replaces the draft.
++  useEffect(() => {
++    const parsed = parseNumber(draft, { max, integer });
++    if (parsed.value !== value) {
++      setDraft(String(value));
++      setErrorKey(null);
++    }
++    // Only an outside value change should resync; typing is handled below.
++    // eslint-disable-next-line react-hooks/exhaustive-deps
++  }, [value]);
++
++  const message = errorKey ? t(errorKey.key, errorKey.vars) : null;
++  useEffect(() => {
++    reportRef.current?.(message);
++  }, [message]);
++
++  return (
++    <input
++      type="text"
++      inputMode={integer ? 'numeric' : 'decimal'}
++      dir="ltr"
++      autoComplete="off"
++      aria-label={label}
++      aria-invalid={errorKey ? true : undefined}
++      value={draft}
++      onChange={(e) => {
++        const raw = e.target.value;
++        setDraft(raw);
++        const parsed = parseNumber(raw, { max, integer, maxMessage });
++        if (parsed.error) {
++          setErrorKey({ key: parsed.error, vars: parsed.vars });
++          return;
++        }
++        setErrorKey(null);
++        if (parsed.value !== value) onChange(parsed.value);
++      }}
++      onBlur={() => {
++        setDraft(String(value));
++        setErrorKey(null);
++      }}
++      className={cn(
++        'numeric min-w-0 bg-transparent text-content-on-dark outline-none',
++        className,
++      )}
++    />
++  );
++}
+diff -ruN a/src/components/calculator/ResultStat.tsx b/src/components/calculator/ResultStat.tsx
+--- a/src/components/calculator/ResultStat.tsx	2026-10-14 12:11:02.383088137 +0000
++++ b/src/components/calculator/ResultStat.tsx	2026-10-14 12:11:02.390978198 +0000
+@@ -15,6 +15,7 @@
+   unit,
+   note,
+   emphasis = false,
++  className,
+ }: {
+   icon: IconName;
+   label: string;
+@@ -22,34 +23,36 @@
+   unit: string;
+   note: string;
+   emphasis?: boolean;
++  className?: string;
+ }) {
+   return (
+     <div
+       className={cn(
+-        'flex flex-col gap-3 rounded-lg border p-5',
++        'flex min-w-0 flex-col gap-1.5 rounded-lg border p-3 sm:p-3.5',
+         emphasis
+           ? 'border-[1.5px] border-line-brand bg-bg-panel-raised'
+           : 'border-line-on-dark bg-bg-panel-deep',
++        className,
+       )}
+     >
+-      <p className="flex items-center gap-2.5 text-label-sm text-content-on-dark-muted">
++      <p className="flex items-center gap-2 text-label-sm text-content-on-dark-muted">
+         <Icon
+           name={icon}
+-          size={18}
++          size={15}
+           className={cn('shrink-0', emphasis ? 'text-solar-300' : 'text-dusk-200')}
+         />
+         {label}
+       </p>
+-      <p className="flex items-baseline gap-1.5">
++      <p className="flex flex-wrap items-baseline gap-x-1.5">
+         <span
+           className={cn(
+-            'numeric text-data-xl',
++            'numeric text-data-l',
+             emphasis ? 'text-solar-300' : 'text-content-on-dark',
+           )}
+         >
+           {value}
+         </span>
+-        <span className="text-label text-content-on-dark-muted">{unit}</span>
++        <span className="text-label-sm text-content-on-dark-muted">{unit}</span>
+       </p>
+       <p className="text-label-sm text-content-on-dark-muted">{note}</p>
+     </div>
+diff -ruN a/src/components/calculator/SolarCalculator.test.tsx b/src/components/calculator/SolarCalculator.test.tsx
+--- a/src/components/calculator/SolarCalculator.test.tsx	2026-10-14 12:11:02.383241363 +0000
++++ b/src/components/calculator/SolarCalculator.test.tsx	2026-10-14 12:11:02.390994627 +0000
+@@ -1,187 +1,371 @@
+-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+-import '@testing-library/jest-dom/vitest';
+-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+-import { LanguageProvider } from '../../i18n/LanguageProvider';
+-import { QuoteRequestProvider } from '../../state/QuoteRequestProvider';
+-import { AssessmentProvider } from '../../state/AssessmentProvider';
+-import { SolarCalculator } from './SolarCalculator';
+-import { StepSystem } from '../rfq/StepSystem';
+-import { CalculatorSection } from '../../sections/CalculatorSection';
+-
+-afterEach(() => {
+-  cleanup();
+-  vi.restoreAllMocks();
+-  vi.unstubAllGlobals();
+-  window.location.hash = '';
+-});
+-
+-beforeEach(() => {
+-  localStorage.clear();
+-  vi.spyOn(window, 'scrollTo').mockImplementation(() => undefined);
+-});
+-
+-describe('SolarCalculator quote handoff', () => {
+-  it('shows the direct-request or smart-calculator choice banner', () => {
+-    vi.stubGlobal(
+-      'IntersectionObserver',
+-      vi.fn(() => ({ observe: vi.fn(), unobserve: vi.fn(), disconnect: vi.fn() })),
+-    );
+-    render(
+-      <LanguageProvider>
+-        <QuoteRequestProvider>
+-          <AssessmentProvider>
+-            <CalculatorSection />
+-          </AssessmentProvider>
+-        </QuoteRequestProvider>
+-      </LanguageProvider>,
+-    );
+-
+-    expect(screen.getByText(/You can fill in a request directly/)).toBeInTheDocument();
+-  });
+-
+-  it('starts a new quote request pre-filled with the calculator result', async () => {
+-    localStorage.setItem('utu-quote-draft', JSON.stringify({ systemKWp: 20, panelCount: 30 }));
+-    localStorage.setItem('utu-quote-step', '4');
+-    render(
+-      <LanguageProvider>
+-        <QuoteRequestProvider>
+-          <AssessmentProvider>
+-            <SolarCalculator />
+-            <StepSystem errors={{}} />
+-          </AssessmentProvider>
+-        </QuoteRequestProvider>
+-      </LanguageProvider>,
+-    );
+-
+-    expect(screen.getByText('Nothing to size yet')).toBeInTheDocument();
+-    expect(screen.getByText('Split AC')).toBeInTheDocument();
+-    fireEvent.click(screen.getByRole('button', { name: 'Load demo values' }));
+-    fireEvent.click(screen.getByRole('button', { name: 'Calculate My System & Request Quotes' }));
+-
+-    await waitFor(() => expect(window.location.hash).toBe('#/request'));
+-    const draft = JSON.parse(localStorage.getItem('utu-quote-draft') ?? '{}');
+-    expect(draft.fromCalculator).toBe(true);
+-    expect(draft.systemKWp).toBeGreaterThan(0);
+-    expect(draft.panelCount).toBeGreaterThan(0);
+-    expect(draft.calculatorDailyKWh).toBeGreaterThan(0);
+-    expect(draft.calculatorPeakAmps).toBeGreaterThan(0);
+-    // The old draft's numbers are replaced and the new request starts at step 1.
+-    expect(draft.systemKWp).not.toBe(20);
+-    expect(localStorage.getItem('utu-quote-step')).toBeNull();
+-    expect(await screen.findByText('Calculated daily consumption')).toBeInTheDocument();
+-    expect(screen.getByText('Estimated peak load equivalent')).toBeInTheDocument();
+-    expect(screen.getByLabelText('System size')).toHaveValue(draft.systemKWp);
+-  });
+-
+-  it('offers a direct RFQ path while the calculator has no load and does not attach calculator data', async () => {
+-    render(
+-      <LanguageProvider>
+-        <QuoteRequestProvider>
+-          <AssessmentProvider>
+-            <SolarCalculator />
+-          </AssessmentProvider>
+-        </QuoteRequestProvider>
+-      </LanguageProvider>,
+-    );
+-
+-    expect(screen.getByRole('button', { name: 'Calculate My System & Request Quotes' })).toBeDisabled();
+-    fireEvent.click(screen.getByRole('button', { name: /Skip calculator and submit a direct request/ }));
+-
+-    await waitFor(() => expect(window.location.hash).toBe('#/request'));
+-    expect(localStorage.getItem('utu-quote-draft')).toBeNull();
+-  });
+-
+-  it('lists standard appliances at zero and calculates immediately when a unit is activated', () => {
+-    render(
+-      <LanguageProvider>
+-        <QuoteRequestProvider>
+-          <AssessmentProvider>
+-            <SolarCalculator />
+-          </AssessmentProvider>
+-        </QuoteRequestProvider>
+-      </LanguageProvider>,
+-    );
+-
+-    expect(screen.getByText('Nothing to size yet')).toBeInTheDocument();
+-    expect(screen.getByText('Split AC')).toBeInTheDocument();
+-    expect(screen.getByText('Refrigerator / Freezer')).toBeInTheDocument();
+-    expect(screen.getByText('LED Lighting')).toBeInTheDocument();
+-    expect(screen.getByText('Television')).toBeInTheDocument();
+-    expect(screen.getByText('Water Pump')).toBeInTheDocument();
+-    expect(screen.getAllByRole('button', { name: 'استمع إلى الإرشادات الصوتية' }).length).toBeGreaterThan(1);
+-    expect(document.querySelectorAll('.on-dark.rounded-xl ul > li [role="status"]')).toHaveLength(10);
+-    expect(Array.from(document.querySelectorAll('.on-dark.rounded-xl ul > li [role="status"]'))
+-      .every((stepperValue) => stepperValue.textContent === '0')).toBe(true);
+-    expect(screen.getByRole('button', { name: 'Calculate My System & Request Quotes' })).toBeDisabled();
+-    expect(document.querySelectorAll('.on-dark.rounded-xl ul > li p.numeric')).toHaveLength(5);
+-    expect(Array.from(document.querySelectorAll('.on-dark.rounded-xl ul > li p.numeric'))
+-      .every((dailyValue) => dailyValue.textContent?.trim() === '0 Wh')).toBe(true);
+-
+-    fireEvent.click(screen.getByRole('button', { name: 'Increase Split AC units' }));
+-
+-    expect(screen.getByText('Equivalent Amperes / ما يعادل بالأمبير')).toBeInTheDocument();
+-    expect(screen.getByText('9,000 Wh')).toBeInTheDocument();
+-    expect(screen.getByText('6.5')).toBeInTheDocument();
+-    expect(screen.getByRole('button', { name: 'Calculate My System & Request Quotes' })).toBeEnabled();
+-
+-    fireEvent.click(screen.getByRole('button', { name: 'Add another appliance' }));
+-    expect(screen.getByText('Evaporative Cooler')).toBeInTheDocument();
+-    fireEvent.click(screen.getByRole('button', { name: 'Increase Evaporative Cooler units' }));
+-    expect(screen.getByText('2,400 Wh')).toBeInTheDocument();
+-    expect(screen.getByText('7.8')).toBeInTheDocument();
+-
+-    fireEvent.click(screen.getByRole('button', { name: 'Decrease Evaporative Cooler units' }));
+-    expect(screen.getByText('Evaporative Cooler').closest('li')?.querySelector('p.numeric'))
+-      .toHaveTextContent('0 Wh');
+-
+-    fireEvent.click(screen.getByRole('button', { name: 'Remove Evaporative Cooler' }));
+-    expect(screen.queryByText('Evaporative Cooler')).not.toBeInTheDocument();
+-    fireEvent.click(screen.getByRole('button', { name: 'Add another appliance' }));
+-    expect(screen.getByText('Evaporative Cooler')).toBeInTheDocument();
+-  });
+-
+-  it('clears demo values and restores all default appliances to zero', () => {
+-    render(
+-      <LanguageProvider>
+-        <QuoteRequestProvider>
+-          <AssessmentProvider>
+-            <SolarCalculator />
+-          </AssessmentProvider>
+-        </QuoteRequestProvider>
+-      </LanguageProvider>,
+-    );
+-
+-    fireEvent.click(screen.getByRole('button', { name: 'Load demo values' }));
+-    expect(screen.queryByText('Nothing to size yet')).not.toBeInTheDocument();
+-    expect(screen.getByRole('button', { name: 'Calculate My System & Request Quotes' })).toBeEnabled();
+-
+-    fireEvent.click(screen.getByRole('button', { name: 'Reset' }));
+-
+-    expect(screen.getByText('Nothing to size yet')).toBeInTheDocument();
+-    expect(screen.getByRole('button', { name: 'Calculate My System & Request Quotes' })).toBeDisabled();
+-    expect(document.querySelectorAll('.on-dark.rounded-xl ul > li [role="status"]')).toHaveLength(10);
+-    expect(Array.from(document.querySelectorAll('.on-dark.rounded-xl ul > li [role="status"]'))
+-      .every((stepperValue) => stepperValue.textContent === '0')).toBe(true);
+-    expect(Array.from(document.querySelectorAll('.on-dark.rounded-xl ul > li p.numeric'))
+-      .every((dailyValue) => dailyValue.textContent?.trim() === '0 Wh')).toBe(true);
+-  });
+-
+-  it('opens the UTU assessment with the same appliances', async () => {
+-    render(
+-      <LanguageProvider>
+-        <QuoteRequestProvider>
+-          <AssessmentProvider>
+-            <SolarCalculator />
+-          </AssessmentProvider>
+-        </QuoteRequestProvider>
+-      </LanguageProvider>,
+-    );
+-
+-    fireEvent.click(screen.getByRole('button', { name: 'Increase Split AC units' }));
+-    fireEvent.click(screen.getByRole('button', { name: 'See UTU assessment' }));
+-
+-    await waitFor(() => expect(window.location.hash).toBe('#/assessment'));
+-    const saved = JSON.parse(localStorage.getItem('utu-assessment-appliances') ?? '[]');
+-    expect(saved.length).toBeGreaterThan(0);
+-  });
+-});
++import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
++import '@testing-library/jest-dom/vitest';
++import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
++import { LanguageProvider } from '../../i18n/LanguageProvider';
++import { QuoteRequestProvider } from '../../state/QuoteRequestProvider';
++import { AssessmentProvider } from '../../state/AssessmentProvider';
++import { SolarCalculator } from './SolarCalculator';
++import { StepSystem } from '../rfq/StepSystem';
++import { CalculatorSection } from '../../sections/CalculatorSection';
++
++afterEach(() => {
++  cleanup();
++  vi.restoreAllMocks();
++  vi.unstubAllGlobals();
++  window.location.hash = '';
++});
++
++beforeEach(() => {
++  localStorage.clear();
++  vi.spyOn(window, 'scrollTo').mockImplementation(() => undefined);
++});
++
++describe('SolarCalculator quote handoff', () => {
++  it('shows the direct-request or smart-calculator choice banner', () => {
++    vi.stubGlobal(
++      'IntersectionObserver',
++      vi.fn(() => ({ observe: vi.fn(), unobserve: vi.fn(), disconnect: vi.fn() })),
++    );
++    render(
++      <LanguageProvider>
++        <QuoteRequestProvider>
++          <AssessmentProvider>
++            <CalculatorSection />
++          </AssessmentProvider>
++        </QuoteRequestProvider>
++      </LanguageProvider>,
++    );
++
++    expect(screen.getByText(/You can fill in a request directly/)).toBeInTheDocument();
++  });
++
++  it('starts a new quote request pre-filled with the calculator result', async () => {
++    localStorage.setItem('utu-quote-draft', JSON.stringify({ systemKWp: 20, panelCount: 30 }));
++    localStorage.setItem('utu-quote-step', '4');
++    render(
++      <LanguageProvider>
++        <QuoteRequestProvider>
++          <AssessmentProvider>
++            <SolarCalculator />
++            <StepSystem errors={{}} />
++          </AssessmentProvider>
++        </QuoteRequestProvider>
++      </LanguageProvider>,
++    );
++
++    expect(screen.getByText('Nothing to size yet')).toBeInTheDocument();
++    expect(screen.getByText('Split AC')).toBeInTheDocument();
++    fireEvent.click(screen.getByRole('button', { name: 'Load demo values' }));
++    fireEvent.click(screen.getByRole('button', { name: 'Calculate My System & Request Quotes' }));
++
++    await waitFor(() => expect(window.location.hash).toBe('#/request'));
++    const draft = JSON.parse(localStorage.getItem('utu-quote-draft') ?? '{}');
++    expect(draft.fromCalculator).toBe(true);
++    expect(draft.systemKWp).toBeGreaterThan(0);
++    expect(draft.panelCount).toBeGreaterThan(0);
++    expect(draft.calculatorDailyKWh).toBeGreaterThan(0);
++    expect(draft.calculatorPeakAmps).toBeGreaterThan(0);
++    // The old draft's numbers are replaced and the new request starts at step 1.
++    expect(draft.systemKWp).not.toBe(20);
++    expect(localStorage.getItem('utu-quote-step')).toBeNull();
++    expect(await screen.findByText('Calculated daily consumption')).toBeInTheDocument();
++    expect(screen.getByText('Estimated peak load equivalent')).toBeInTheDocument();
++    expect(screen.getByLabelText('System size')).toHaveValue(draft.systemKWp);
++  });
++
++  it('offers a direct RFQ path while the calculator has no load and does not attach calculator data', async () => {
++    render(
++      <LanguageProvider>
++        <QuoteRequestProvider>
++          <AssessmentProvider>
++            <SolarCalculator />
++          </AssessmentProvider>
++        </QuoteRequestProvider>
++      </LanguageProvider>,
++    );
++
++    expect(screen.getByRole('button', { name: 'Calculate My System & Request Quotes' })).toBeDisabled();
++    fireEvent.click(screen.getByRole('button', { name: /Skip calculator and submit a direct request/ }));
++
++    await waitFor(() => expect(window.location.hash).toBe('#/request'));
++    expect(localStorage.getItem('utu-quote-draft')).toBeNull();
++  });
++
++  it('lists standard appliances at zero and calculates immediately when a unit is activated', () => {
++    render(
++      <LanguageProvider>
++        <QuoteRequestProvider>
++          <AssessmentProvider>
++            <SolarCalculator />
++          </AssessmentProvider>
++        </QuoteRequestProvider>
++      </LanguageProvider>,
++    );
++
++    expect(screen.getByText('Nothing to size yet')).toBeInTheDocument();
++    expect(screen.getByText('Split AC')).toBeInTheDocument();
++    expect(screen.getByText('Refrigerator / Freezer')).toBeInTheDocument();
++    expect(screen.getByText('LED Lighting')).toBeInTheDocument();
++    expect(screen.getByText('Television')).toBeInTheDocument();
++    expect(screen.getByText('Water Pump')).toBeInTheDocument();
++    expect(screen.getAllByRole('button', { name: 'استمع إلى الإرشادات الصوتية' }).length).toBeGreaterThan(1);
++    expect(document.querySelectorAll('.on-dark.rounded-xl ul > li [role="status"]')).toHaveLength(10);
++    expect(Array.from(document.querySelectorAll('.on-dark.rounded-xl ul > li [role="status"]'))
++      .every((stepperValue) => stepperValue.textContent === '0')).toBe(true);
++    expect(screen.getByRole('button', { name: 'Calculate My System & Request Quotes' })).toBeDisabled();
++    expect(document.querySelectorAll('.on-dark.rounded-xl ul > li p.numeric')).toHaveLength(5);
++    expect(Array.from(document.querySelectorAll('.on-dark.rounded-xl ul > li p.numeric'))
++      .every((dailyValue) => dailyValue.textContent?.trim() === '0 Wh')).toBe(true);
++
++    fireEvent.click(screen.getByRole('button', { name: 'Increase Split AC units' }));
++
++    expect(screen.getByText('Equivalent Amperes / ما يعادل بالأمبير')).toBeInTheDocument();
++    expect(screen.getByText('9,000 Wh')).toBeInTheDocument();
++    expect(screen.getByText('6.5')).toBeInTheDocument();
++    expect(screen.getByRole('button', { name: 'Calculate My System & Request Quotes' })).toBeEnabled();
++
++    fireEvent.click(screen.getByRole('button', { name: 'Add another appliance' }));
++    expect(screen.getByText('Evaporative Cooler')).toBeInTheDocument();
++    expect(screen.getByText('2,400 Wh')).toBeInTheDocument();
++    expect(screen.getByText('7.8')).toBeInTheDocument();
++
++    fireEvent.click(screen.getByRole('button', { name: 'Decrease Evaporative Cooler units' }));
++    expect(screen.getByText('Evaporative Cooler').closest('li')?.querySelector('p.numeric'))
++      .toHaveTextContent('0 Wh');
++
++    fireEvent.click(screen.getByRole('button', { name: 'Remove Evaporative Cooler' }));
++    expect(screen.queryByText('Evaporative Cooler')).not.toBeInTheDocument();
++    fireEvent.click(screen.getByRole('button', { name: 'Add another appliance' }));
++    expect(screen.getByText('Evaporative Cooler')).toBeInTheDocument();
++  });
++
++  it('clears demo values and restores all default appliances to zero', () => {
++    render(
++      <LanguageProvider>
++        <QuoteRequestProvider>
++          <AssessmentProvider>
++            <SolarCalculator />
++          </AssessmentProvider>
++        </QuoteRequestProvider>
++      </LanguageProvider>,
++    );
++
++    fireEvent.click(screen.getByRole('button', { name: 'Load demo values' }));
++    expect(screen.queryByText('Nothing to size yet')).not.toBeInTheDocument();
++    expect(screen.getByRole('button', { name: 'Calculate My System & Request Quotes' })).toBeEnabled();
++
++    fireEvent.click(screen.getByRole('button', { name: 'Reset' }));
++
++    expect(screen.getByText('Nothing to size yet')).toBeInTheDocument();
++    expect(screen.getByRole('button', { name: 'Calculate My System & Request Quotes' })).toBeDisabled();
++    expect(document.querySelectorAll('.on-dark.rounded-xl ul > li [role="status"]')).toHaveLength(10);
++    expect(Array.from(document.querySelectorAll('.on-dark.rounded-xl ul > li [role="status"]'))
++      .every((stepperValue) => stepperValue.textContent === '0')).toBe(true);
++    expect(Array.from(document.querySelectorAll('.on-dark.rounded-xl ul > li p.numeric'))
++      .every((dailyValue) => dailyValue.textContent?.trim() === '0 Wh')).toBe(true);
++  });
++
++  it('opens the UTU assessment with the same appliances', async () => {
++    render(
++      <LanguageProvider>
++        <QuoteRequestProvider>
++          <AssessmentProvider>
++            <SolarCalculator />
++          </AssessmentProvider>
++        </QuoteRequestProvider>
++      </LanguageProvider>,
++    );
++
++    fireEvent.click(screen.getByRole('button', { name: 'Increase Split AC units' }));
++    fireEvent.click(screen.getByRole('button', { name: 'See UTU assessment' }));
++
++    await waitFor(() => expect(window.location.hash).toBe('#/assessment'));
++    const saved = JSON.parse(localStorage.getItem('utu-assessment-appliances') ?? '[]');
++    expect(saved.length).toBeGreaterThan(0);
++  });
++});
++
++function renderCalculator() {
++  return render(
++    <LanguageProvider>
++      <QuoteRequestProvider>
++        <AssessmentProvider>
++          <SolarCalculator />
++        </AssessmentProvider>
++      </QuoteRequestProvider>
++    </LanguageProvider>,
++  );
++}
++
++/** The list item for the device currently named `name`. */
++const rowOf = (name: string) =>
++  screen.getAllByRole('button', { name: `Rename ${name}` })[0].closest('li') as HTMLElement;
++
++const dailyOf = (row: HTMLElement) => row.querySelector('p.numeric')?.textContent?.trim();
++
++const field = (row: HTMLElement, label: string) =>
++  within(row).getByRole('textbox', { name: label }) as HTMLInputElement;
++
++/** Opens the name field of a row and picks a suggestion (no inputType, as from a datalist). */
++function pickName(current: string, next: string) {
++  fireEvent.click(screen.getAllByRole('button', { name: `Rename ${current}` })[0]);
++  fireEvent.change(screen.getByRole('combobox', { name: 'Device name' }), { target: { value: next } });
++}
++
++/** Opens the name field of a row, types a label and confirms with Enter. */
++function typeName(current: string, next: string) {
++  fireEvent.click(screen.getAllByRole('button', { name: `Rename ${current}` })[0]);
++  const input = screen.getByRole('combobox', { name: 'Device name' });
++  fireEvent.input(input, { target: { value: next }, inputType: 'insertText' });
++  fireEvent.keyDown(input, { key: 'Enter' });
++}
++
++describe('SolarCalculator smart devices', () => {
++  it('adds an evaporative cooler with its defaults, which can be turned off and removed', () => {
++    renderCalculator();
++    fireEvent.click(screen.getByRole('button', { name: 'Add another appliance' }));
++
++    const row = rowOf('Evaporative Cooler');
++    expect(field(row, 'Power of Evaporative Cooler in watts')).toHaveValue('300');
++    expect(field(row, 'Evaporative Cooler units, value')).toHaveValue('1');
++    expect(field(row, 'Evaporative Cooler hours per day, value')).toHaveValue('8');
++    expect(dailyOf(row)).toBe('2,400 Wh');
++
++    fireEvent.click(within(row).getByRole('button', { name: 'Decrease Evaporative Cooler units' }));
++    expect(dailyOf(row)).toBe('0 Wh');
++    fireEvent.click(within(row).getByRole('button', { name: 'Remove Evaporative Cooler' }));
++    expect(screen.queryByText('Evaporative Cooler')).not.toBeInTheDocument();
++  });
++
++  it('keeps added rows identical to standard rows, each with a rename button', () => {
++    renderCalculator();
++    fireEvent.click(screen.getByRole('button', { name: 'Add another appliance' }));
++    fireEvent.click(screen.getByRole('button', { name: 'Add another appliance' }));
++
++    expect(screen.getByText('Ceiling Fan')).toBeInTheDocument();
++    expect(document.querySelector('select')).toBeNull();
++    const rows = document.querySelectorAll('.on-dark.rounded-xl ul > li');
++    expect(rows).toHaveLength(7);
++    rows.forEach((row) => {
++      expect(within(row as HTMLElement).getByRole('button', { name: /^Rename / })).toBeInTheDocument();
++    });
++  });
++
++  it('replaces the values when another device is picked instead of adding to them', () => {
++    renderCalculator();
++    fireEvent.click(screen.getByRole('button', { name: 'Add another appliance' }));
++
++    pickName('Evaporative Cooler', 'Electric Iron');
++    let row = rowOf('Electric Iron');
++    expect(field(row, 'Power of Electric Iron in watts')).toHaveValue('1500');
++    expect(field(row, 'Electric Iron hours per day, value')).toHaveValue('0.5');
++    expect(dailyOf(row)).toBe('750 Wh');
++
++    pickName('Electric Iron', 'Laptop');
++    row = rowOf('Laptop');
++    expect(field(row, 'Power of Laptop in watts')).toHaveValue('65');
++    expect(field(row, 'Laptop hours per day, value')).toHaveValue('6');
++    expect(field(row, 'Laptop units, value')).toHaveValue('1');
++    expect(dailyOf(row)).toBe('390 Wh');
++  });
++
++  it('does not apply a device while a longer name is still being typed', () => {
++    renderCalculator();
++    fireEvent.click(screen.getByRole('button', { name: 'Add another appliance' }));
++
++    typeName('Evaporative Cooler', 'Laptop stand');
++    const row = rowOf('Laptop stand');
++    expect(field(row, 'Power of Laptop stand in watts')).toHaveValue('300');
++    expect(dailyOf(row)).toBe('2,400 Wh');
++  });
++
++  it('keeps two rows of the same device independent', () => {
++    renderCalculator();
++    fireEvent.click(screen.getByRole('button', { name: 'Add another appliance' }));
++    fireEvent.click(screen.getByRole('button', { name: 'Add another appliance' }));
++    pickName('Evaporative Cooler', 'Ceiling Fan');
++    expect(screen.getAllByRole('button', { name: 'Rename Ceiling Fan' })).toHaveLength(2);
++
++    typeName('Ceiling Fan', 'Bedroom fan');
++    const bedroom = rowOf('Bedroom fan');
++    fireEvent.change(field(bedroom, 'Power of Bedroom fan in watts'), { target: { value: '100' } });
++    expect(dailyOf(bedroom)).toBe('800 Wh');
++
++    const other = rowOf('Ceiling Fan');
++    expect(field(other, 'Power of Ceiling Fan in watts')).toHaveValue('75');
++    expect(dailyOf(other)).toBe('600 Wh');
++  });
++
++  it('uses a custom name as a label only and passes it to the assessment', async () => {
++    renderCalculator();
++    fireEvent.click(screen.getByRole('button', { name: 'Add another appliance' }));
++
++    typeName('Evaporative Cooler', 'Heater');
++    const row = rowOf('Heater');
++    expect(field(row, 'Power of Heater in watts')).toHaveValue('300');
++    fireEvent.change(field(row, 'Power of Heater in watts'), { target: { value: '2000' } });
++    fireEvent.change(field(row, 'Heater hours per day, value'), { target: { value: '1.5' } });
++    expect(dailyOf(row)).toBe('3,000 Wh');
++
++    fireEvent.click(screen.getByRole('button', { name: 'See UTU assessment' }));
++    await waitFor(() => expect(window.location.hash).toBe('#/assessment'));
++    const saved = JSON.parse(localStorage.getItem('utu-assessment-appliances') ?? '[]');
++    const heater = saved.find((a: { name: { en: string } }) => a.name.en === 'Heater');
++    expect(heater).toMatchObject({ watts: 2000, hours: 1.5, units: 1, name: { en: 'Heater', ar: 'Heater' } });
++  });
++
++  it('keeps the values of a renamed standard row and restores the name when cleared', () => {
++    renderCalculator();
++    fireEvent.click(screen.getByRole('button', { name: 'Load demo values' }));
++
++    typeName('Split AC', 'Living room AC');
++    const row = rowOf('Living room AC');
++    expect(field(row, 'Power of Living room AC in watts')).toHaveValue('1500');
++    expect(field(row, 'Living room AC units, value')).toHaveValue('2');
++    expect(dailyOf(row)).toBe('18,000 Wh');
++
++    typeName('Living room AC', '');
++    expect(rowOf('Split AC')).toBe(row);
++    expect(dailyOf(row)).toBe('18,000 Wh');
++  });
++
++  it('rejects invalid typed values without changing the estimate', () => {
++    renderCalculator();
++    fireEvent.click(screen.getByRole('button', { name: 'Increase Split AC units' }));
++    const row = rowOf('Split AC');
++    expect(dailyOf(row)).toBe('9,000 Wh');
++    expect(screen.getByText('6.5')).toBeInTheDocument();
++
++    const cases: [string, string, string][] = [
++      ['Power of Split AC in watts', '-5', 'Value cannot be negative.'],
++      ['Split AC units, value', '1.5', 'Quantity must be a whole number.'],
++      ['Split AC hours per day, value', '30', 'Hours must be between 0 and 24.'],
++      ['Split AC hours per day, value', '', 'Enter a number.'],
++      ['Power of Split AC in watts', '25000', 'Maximum is 20000.'],
++    ];
++    for (const [label, value, message] of cases) {
++      const input = field(row, label);
++      const before = input.value;
++      fireEvent.change(input, { target: { value } });
++      expect(within(row).getByRole('alert')).toHaveTextContent(message);
++      expect(dailyOf(row)).toBe('9,000 Wh');
++      expect(screen.getByText('6.5')).toBeInTheDocument();
++      fireEvent.blur(input);
++      expect(input).toHaveValue(before);
++      expect(within(row).queryByRole('alert')).not.toBeInTheDocument();
++    }
++  });
++
++  it('accepts Arabic-Indic digits and shows Arabic validation messages', () => {
++    localStorage.setItem('utu-lang', 'ar');
++    renderCalculator();
++    const row = screen.getByRole('button', { name: 'تغيير اسم مكيّف سبليت' }).closest('li') as HTMLElement;
++
++    fireEvent.change(field(row, 'عدد مكيّف سبليت، القيمة'), { target: { value: '٢' } });
++    expect(dailyOf(row)).toBe('18,000 Wh');
++
++    fireEvent.change(field(row, 'قدرة مكيّف سبليت بالواط'), { target: { value: '-1' } });
++    expect(within(row).getByRole('alert')).toHaveTextContent('لا يمكن أن تكون القيمة سالبة.');
++    expect(dailyOf(row)).toBe('18,000 Wh');
++  });
++});
+diff -ruN a/src/components/calculator/SolarCalculator.tsx b/src/components/calculator/SolarCalculator.tsx
+--- a/src/components/calculator/SolarCalculator.tsx	2026-10-14 12:11:02.383279233 +0000
++++ b/src/components/calculator/SolarCalculator.tsx	2026-10-14 12:11:02.391017021 +0000
+@@ -1,11 +1,17 @@
+-import { useState } from 'react';
++import { useRef, useState } from 'react';
+ import { Button } from '../ui/Button';
+ import { VoiceGuideButton } from '../ui/VoiceGuideButton';
+ import { Icon } from '../icons/Icon';
++import { cn } from '../../lib/cn';
+ import { ApplianceRow } from './ApplianceRow';
+ import { ResultStat } from './ResultStat';
+ import { ASSUMPTIONS, useSolarEstimate } from './useSolarEstimate';
+-import { defaultAppliances, extraAppliances, type Appliance } from '../../data/content';
++import {
++  defaultAppliances,
++  findApplianceDefaults,
++  newAddedAppliance,
++  type Appliance,
++} from '../../data/content';
+ import { fmt, useLanguage } from '../../i18n/LanguageProvider';
+ import { useQuoteRequest } from '../../state/QuoteRequestProvider';
+ import { useAssessment } from '../../state/AssessmentProvider';
+@@ -17,6 +23,8 @@
+  *
+  * Starts with the standard household appliances visible but inactive. Users
+  * can activate a load with its unit stepper or load the example configuration.
++ * "Add another device" always works: it adds the next catalog device with its
++ * smart defaults, and any row can be renamed or switched to another device.
+  */
+ export function SolarCalculator({
+   dashboardLayout = false,
+@@ -36,27 +44,29 @@
+   const estimate = useSolarEstimate(appliances);
+   const isEmpty = estimate.dailyWh === 0;
+ 
+-  const availableAppliances = [...defaultAppliances, ...extraAppliances];
+-  const remaining = availableAppliances.filter((e) => !appliances.some((a) => a.id === e.id));
+-
++  /** Each row is updated by its own id, so two rows of one device stay independent. */
+   const update = (next: Appliance) => {
+-    const configured = availableAppliances.find((appliance) => appliance.id === next.id);
+     setAppliances((list) => list.map((appliance) => {
+       if (appliance.id !== next.id) return appliance;
+-      if (next.units === 0) return { ...next, hours: 0 };
+-      if (appliance.units === 0 && next.units > 0) {
+-        return { ...next, hours: configured?.hours ?? 1 };
++      // Switching a device off clears its hours.
++      if (appliance.units > 0 && next.units === 0) return { ...next, hours: 0 };
++      // Switching it on fills in typical hours, but never over hours the user typed.
++      if (appliance.units === 0 && next.units > 0 && next.hours === 0) {
++        return { ...next, hours: findApplianceDefaults(next.kind ?? next.id)?.hours ?? 1 };
+       }
+       return next;
+     }));
+   };
+ 
++  const addedCount = useRef(0);
+   const addAppliance = () => {
+-    const next = remaining[0];
+-    if (next) {
+-      setAppliances((list) => [...list, { ...next, units: 0, hours: 0 }]);
+-      setActiveId(next.id);
+-    }
++    addedCount.current += 1;
++    const next = newAddedAppliance(
++      `added-${Date.now()}-${addedCount.current}`,
++      appliances.map((a) => a.kind ?? a.id),
++    );
++    setAppliances((list) => [...list, next]);
++    setActiveId(next.id);
+   };
+ 
+   const loadDemoValues = () => {
+@@ -97,10 +107,12 @@
+   const liveGroups = appliances.filter((a) => a.units > 0 && a.hours > 0).length;
+ 
+   return (
+-    <div className={dashboardLayout ? 'contents' : 'on-dark rounded-xl border border-line-on-dark bg-bg-inverse p-3 shadow-panel sm:p-4'}>
+-      <div className={dashboardLayout ? 'on-dark rounded-xl border border-line-on-dark bg-bg-inverse p-3 shadow-panel sm:p-4' : ''}>
++    <div className={dashboardLayout ? 'contents' : 'on-dark rounded-xl border border-line-on-dark bg-bg-inverse p-4 shadow-panel sm:p-5'}>
++      <div className={dashboardLayout
++        ? 'on-dark rounded-xl border border-line-on-dark bg-bg-inverse p-4 shadow-panel sm:p-5 lg:col-start-2 lg:row-span-2 lg:row-start-1'
++        : ''}>
+         {choiceBanner && (
+-          <p className="mb-2 rounded-xl border border-amber-300/30 bg-amber-400/10 px-3 py-2 text-body-sm text-amber-100">
++          <p className="mb-3 rounded-lg border border-amber-300/30 bg-amber-400/10 px-3 py-2 text-label-sm text-amber-100">
+             {choiceBanner}
+           </p>
+         )}
+@@ -130,7 +142,7 @@
+           </div>
+         </div>
+ 
+-        <ul className="mt-3 flex flex-col gap-1.5">
++        <ul className="mt-3 flex flex-col gap-2">
+           {appliances.map((a) => (
+             <ApplianceRow
+               key={a.id}
+@@ -143,20 +155,18 @@
+           ))}
+         </ul>
+ 
+-        {remaining.length > 0 && (
+-          <button
+-            type="button"
+-            onClick={addAppliance}
+-            className="mt-2 flex w-full items-center justify-center gap-2.5 rounded-[12px] border-[1.5px] border-dashed border-line-on-dark py-2.5 text-label text-solar-300 transition-colors hover:border-solar-400 hover:bg-bg-panel-deep"
+-          >
+-            <Icon name="plus" size={17} />
+-            {t('panel.add')}
+-          </button>
+-        )}
++        <button
++          type="button"
++          onClick={addAppliance}
++          className="mt-2 flex w-full items-center justify-center gap-2 rounded-[12px] border-[1.5px] border-dashed border-line-on-dark py-2.5 text-label text-solar-300 transition-colors hover:border-solar-400 hover:bg-bg-panel-deep"
++        >
++          <Icon name="plus" size={16} />
++          {t('panel.add')}
++        </button>
+       </div>
+ 
+       <div className={dashboardLayout
+-        ? 'on-dark rounded-2xl border border-amber-500/20 bg-slate-900/60 p-5 backdrop-blur-md lg:col-span-2'
++        ? 'on-dark rounded-2xl border border-amber-500/20 bg-slate-900/60 p-4 backdrop-blur-md sm:p-5 lg:col-start-1 lg:row-start-2 lg:self-start'
+         : ''}>
+         <hr className={dashboardLayout ? 'mb-4 border-line-on-dark lg:hidden' : 'my-4 border-line-on-dark'} />
+ 
+@@ -170,21 +180,24 @@
+         {isEmpty ? (
+           <div
+             role="status"
+-            className="mt-3 rounded-lg border border-dashed border-line-on-dark bg-bg-panel-deep px-5 py-6 text-center"
++            className="mt-3 rounded-lg border border-dashed border-line-on-dark bg-bg-panel-deep px-4 py-5 text-center"
+           >
+             <Icon
+               name="calculator"
+-              size={28}
++              size={22}
+               className="mx-auto text-content-on-dark-muted"
+               aria-hidden="true"
+             />
+-            <p className="mt-3 text-label text-content-on-dark">{t('empty.title')}</p>
++            <p className="mt-2 text-label text-content-on-dark">{t('empty.title')}</p>
+             <p className="mx-auto mt-1 max-w-md text-body-sm text-content-on-dark-muted">
+               {t('empty.body')}
+             </p>
+           </div>
+         ) : (
+-          <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
++          <div className={cn(
++            'mt-3 grid grid-cols-2 gap-2.5 sm:grid-cols-3',
++            dashboardLayout ? 'lg:grid-cols-2' : 'lg:grid-cols-5',
++          )}>
+             <ResultStat
+               icon="zap"
+               label={t('res.amps')}
+@@ -206,6 +219,7 @@
+               unit={t('res.unitKwp')}
+               note={t('res.sizeNote', { n: estimate.panelCount, w: ASSUMPTIONS.PANEL_WATTS })}
+               emphasis
++              className={cn('col-span-2 sm:col-span-1', dashboardLayout && 'lg:col-span-2')}
+             />
+             <ResultStat
+               icon="battery"
+@@ -224,9 +238,10 @@
+           </div>
+         )}
+ 
+-        <div className="mt-4 flex flex-wrap items-center gap-4">
++        <div className="mt-4 flex flex-wrap items-center gap-2.5 sm:gap-3">
+           <Button
+             variant="primary"
++            size="md"
+             className="transition-all duration-200 motion-safe:hover:-translate-y-0.5 hover:shadow-lg"
+             onClick={requestQuotes}
+             disabled={isEmpty}
+@@ -237,7 +252,7 @@
+             <button
+               type="button"
+               onClick={() => goTo(paths.request)}
+-              className="inline-flex min-h-11 items-center gap-2 rounded-full border border-amber-300/40 bg-amber-400/10 px-4 py-2.5 text-label font-semibold text-amber-200 transition-all duration-200 hover:-translate-y-0.5 hover:border-amber-200/70 hover:bg-amber-400/20"
++              className="inline-flex min-h-10 items-center gap-2 rounded-full border border-amber-300/40 bg-amber-400/10 px-4 py-2 text-label font-semibold text-amber-200 transition-all duration-200 hover:-translate-y-0.5 hover:border-amber-200/70 hover:bg-amber-400/20"
+             >
+               {t('panel.directRequest')}
+               <Icon name="arrow-right" size={16} className="rtl:rotate-180" />
+@@ -245,6 +260,7 @@
+           )}
+           <Button
+             variant="onDark"
++            size="md"
+             className="transition-all duration-200 motion-safe:hover:-translate-y-0.5 hover:border-amber-200/50 hover:shadow-lg"
+             onClick={openAssessment}
+             disabled={isEmpty}
+diff -ruN a/src/components/calculator/Stepper.tsx b/src/components/calculator/Stepper.tsx
+--- a/src/components/calculator/Stepper.tsx	2026-10-14 12:11:02.383309698 +0000
++++ b/src/components/calculator/Stepper.tsx	2026-10-14 12:11:02.390962262 +0000
+@@ -1,6 +1,8 @@
+ import { useId } from 'react';
+ import { Icon } from '../icons/Icon';
+ import { VoiceGuideButton } from '../ui/VoiceGuideButton';
++import { NumberField } from './NumberField';
++import type { TranslationKey } from '../../i18n/translations';
+ 
+ /**
+  * Numeric stepper for the calculator.
+@@ -12,6 +14,8 @@
+  *
+  * Minus stays on the reading-start side in both directions — the row mirrors
+  * with the page, so the control does too.
++ *
++ * The value itself can also be typed; see NumberField for validation.
+  */
+ export function Stepper({
+   label,
+@@ -22,6 +26,10 @@
+   decreaseLabel,
+   increaseLabel,
+   voiceGuide,
++  integer = false,
++  maxMessage,
++  valueLabel,
++  onErrorChange,
+   onChange,
+ }: {
+   /** Short visible caption, e.g. "Units". */
+@@ -34,14 +42,21 @@
+   decreaseLabel: string;
+   increaseLabel: string;
+   voiceGuide?: string;
++  /** Only whole numbers may be typed. */
++  integer?: boolean;
++  /** Message shown when a typed value is above `max`. */
++  maxMessage?: TranslationKey;
++  /** Accessible name of the typed field. */
++  valueLabel: string;
++  onErrorChange?: (message: string | null) => void;
+   onChange: (next: number) => void;
+ }) {
+   const id = useId();
+   const labelId = `${id}-label`;
+-  const clamp = (n: number) => Math.min(max, Math.max(min, n));
++  const clamp = (n: number) => Math.round(Math.min(max, Math.max(min, n)) * 100) / 100;
+ 
+   return (
+-    <div className="flex flex-col gap-1.5">
++    <div className="flex flex-1 flex-col gap-1 sm:flex-none">
+       <span className="flex items-center gap-1">
+         <span id={labelId} className="text-label-sm text-content-on-dark-muted">{label}</span>
+         {voiceGuide && <VoiceGuideButton text={voiceGuide} onDark />}
+@@ -49,22 +64,27 @@
+       <span className="sr-only" id={`${id}-full`}>
+         {fullLabel}
+       </span>
+-      <div className="flex items-center rounded-[9px] border border-line-on-dark bg-bg-panel-raised">
++      <div className="flex items-center rounded-[9px] border border-line-on-dark bg-bg-panel-raised transition-colors focus-within:border-line-brand">
+         <button
+           type="button"
+           onClick={() => onChange(clamp(value - 1))}
+           disabled={value <= min}
+           aria-label={decreaseLabel}
+-          className="grid h-9 w-9 place-items-center rounded-s-[9px] text-content-on-dark-muted transition-colors hover:text-content-on-dark disabled:opacity-40"
++          className="grid h-9 w-9 shrink-0 place-items-center rounded-s-[9px] text-content-on-dark-muted transition-colors hover:text-content-on-dark disabled:opacity-40"
+         >
+           <Icon name="minus" size={16} />
+         </button>
+-        <span
+-          role="status"
+-          aria-live="polite"
+-          aria-labelledby={`${id}-full`}
+-          className="numeric w-10 text-center text-label text-content-on-dark"
+-        >
++        <NumberField
++          value={value}
++          max={max}
++          integer={integer}
++          maxMessage={maxMessage}
++          label={valueLabel}
++          onErrorChange={onErrorChange}
++          onChange={onChange}
++          className="w-10 flex-1 text-center text-label sm:flex-none"
++        />
++        <span role="status" aria-live="polite" aria-labelledby={`${id}-full`} className="sr-only">
+           {value}
+         </span>
+         <button
+@@ -72,7 +92,7 @@
+           onClick={() => onChange(clamp(value + 1))}
+           disabled={value >= max}
+           aria-label={increaseLabel}
+-          className="grid h-9 w-9 place-items-center rounded-e-[9px] text-content-on-dark-muted transition-colors hover:text-content-on-dark disabled:opacity-40"
++          className="grid h-9 w-9 shrink-0 place-items-center rounded-e-[9px] text-content-on-dark-muted transition-colors hover:text-content-on-dark disabled:opacity-40"
+         >
+           <Icon name="plus" size={16} />
+         </button>
+diff -ruN a/src/data/content.ts b/src/data/content.ts
+--- a/src/data/content.ts	2026-10-14 12:11:02.385305624 +0000
++++ b/src/data/content.ts	2026-10-14 12:11:02.392505450 +0000
+@@ -365,24 +365,114 @@
+   hours: number;
+   icon: IconName;
+   name: Localized<string>;
++  /** The catalog device this row started from (see `applianceCatalog`). */
++  kind?: string;
++  /** True once the user has typed a custom label for the row. */
++  nameEdited?: boolean;
+ };
+ 
+-/** Starting configuration for the demo calculator — a 3-bedroom Baghdad home. */
+-export const defaultAppliances: Appliance[] = [
+-  { id: 'ac', watts: 1500, units: 2, hours: 6, icon: 'air-conditioner', name: L('Split AC', 'مكيّف سبليت') },
+-  { id: 'fridge', watts: 250, units: 1, hours: 24, icon: 'fridge', name: L('Refrigerator / Freezer', 'ثلاجة / مجمدة') },
+-  { id: 'lights', watts: 12, units: 18, hours: 6, icon: 'lightbulb', name: L('LED Lighting', 'إنارة LED') },
+-  { id: 'tv', watts: 120, units: 2, hours: 5, icon: 'tv', name: L('Television', 'تلفزيون') },
+-  { id: 'pump', watts: 750, units: 1, hours: 2, icon: 'water-pump', name: L('Water Pump', 'مضخة ماء') },
+-];
++/** Typical values for one kind of device. */
++export type ApplianceDefaults = {
++  id: string;
++  watts: number;
++  /** Daily energy-equivalent use, not compressor or motor runtime. */
++  hours: number;
++  icon: IconName;
++  name: Localized<string>;
++};
+ 
+-/** Offered by the "add another appliance" control. */
+-export const extraAppliances: Appliance[] = [
+-  { id: 'cooler', watts: 300, units: 1, hours: 8, icon: 'air-conditioner', name: L('Evaporative Cooler', 'مبرّدة') },
+-  { id: 'freezer', watts: 300, units: 1, hours: 24, icon: 'fridge', name: L('Chest Freezer', 'مجمّدة') },
+-  { id: 'washer', watts: 500, units: 1, hours: 1, icon: 'washing-machine', name: L('Washing Machine', 'غسالة') },
++/**
++ * Every device the calculator knows, with its smart defaults. The demo rows
++ * and the "add another device" suggestions are derived from this list, so the
++ * values live in one place only.
++ */
++export const applianceCatalog: ApplianceDefaults[] = [
++  { id: 'ac', watts: 1500, hours: 6, icon: 'air-conditioner', name: L('Split AC', 'مكيّف سبليت') },
++  { id: 'fridge', watts: 200, hours: 8, icon: 'fridge', name: L('Refrigerator / Freezer', 'ثلاجة / مجمدة') },
++  { id: 'lights', watts: 10, hours: 6, icon: 'lightbulb', name: L('LED Lighting', 'إنارة LED') },
++  { id: 'tv', watts: 100, hours: 5, icon: 'tv', name: L('Television', 'تلفزيون') },
++  { id: 'pump', watts: 750, hours: 2, icon: 'water-pump', name: L('Water Pump', 'مضخة ماء') },
++  { id: 'cooler', watts: 300, hours: 8, icon: 'air-conditioner', name: L('Evaporative Cooler', 'مبرّدة') },
++  { id: 'fan', watts: 75, hours: 8, icon: 'air-conditioner', name: L('Ceiling Fan', 'مروحة سقفية') },
++  { id: 'freezer', watts: 200, hours: 10, icon: 'fridge', name: L('Chest Freezer', 'مجمّدة') },
++  { id: 'washer', watts: 500, hours: 1, icon: 'washing-machine', name: L('Washing Machine', 'غسالة') },
++  { id: 'laptop', watts: 65, hours: 6, icon: 'tv', name: L('Laptop', 'لابتوب') },
++  { id: 'desktop', watts: 250, hours: 6, icon: 'tv', name: L('Desktop Computer', 'حاسوب مكتبي') },
++  { id: 'router', watts: 12, hours: 24, icon: 'zap', name: L('Wi-Fi Router', 'راوتر واي فاي') },
++  { id: 'charger', watts: 10, hours: 3, icon: 'phone', name: L('Phone Charger', 'شاحن هاتف') },
++  { id: 'iron', watts: 1500, hours: 0.5, icon: 'zap', name: L('Electric Iron', 'مكواة كهربائية') },
+ ];
+ 
++/** The catalog entry with this id, if any. */
++export function findApplianceDefaults(kind: string | undefined): ApplianceDefaults | undefined {
++  return kind ? applianceCatalog.find((entry) => entry.id === kind) : undefined;
++}
++
++/** Matches an English name (any case) or an Arabic name. */
++export function findApplianceByName(typed: string): ApplianceDefaults | undefined {
++  const text = typed.trim();
++  if (!text) return undefined;
++  const lower = text.toLowerCase();
++  return applianceCatalog.find(
++    (entry) => entry.name.en.toLowerCase() === lower || entry.name.ar === text,
++  );
++}
++
++const fromCatalog = (entry: ApplianceDefaults, units: number): Appliance => ({
++  id: entry.id,
++  kind: entry.id,
++  watts: entry.watts,
++  units,
++  hours: entry.hours,
++  icon: entry.icon,
++  name: { ...entry.name },
++});
++
++/**
++ * Turns a row into another kind of device. The new defaults replace the old
++ * watts, hours, icon and name; they are never added on top of them.
++ */
++export function withApplianceKind(appliance: Appliance, kind: string): Appliance {
++  const entry = findApplianceDefaults(kind);
++  if (!entry) return appliance;
++  return {
++    ...appliance,
++    kind: entry.id,
++    watts: entry.watts,
++    hours: entry.hours,
++    icon: entry.icon,
++    name: { ...entry.name },
++    units: Math.max(1, appliance.units),
++    nameEdited: false,
++  };
++}
++
++/** Demo quantities — a 3-bedroom Baghdad home. */
++const DEMO_UNITS: Record<string, number> = { ac: 2, fridge: 1, lights: 18, tv: 2, pump: 1 };
++
++/** Starting configuration for the demo calculator. */
++export const defaultAppliances: Appliance[] = applianceCatalog
++  .filter((entry) => entry.id in DEMO_UNITS)
++  .map((entry) => fromCatalog(entry, DEMO_UNITS[entry.id]));
++
++/** Offered, in order, by the "add another device" control. */
++export const extraAppliances: Appliance[] = applianceCatalog
++  .filter((entry) => !(entry.id in DEMO_UNITS))
++  .map((entry) => fromCatalog(entry, 1));
++
++/**
++ * A ready-to-use row for "add another device": the next catalog device not
++ * already on the list, with its defaults and quantity 1.
++ */
++export function newAddedAppliance(id: string, usedKinds: Iterable<string>): Appliance {
++  const used = new Set(usedKinds);
++  const entry =
++    extraAppliances.find((a) => !used.has(a.id)) ??
++    defaultAppliances.find((a) => !used.has(a.id)) ??
++    extraAppliances[0];
++  return { ...entry, name: { ...entry.name }, id };
++}
++
+ export const navLinks = [
+   { key: 'nav.home', href: '#top' },
+   { key: 'nav.companies', href: '#companies' },
+diff -ruN a/src/i18n/translations.ts b/src/i18n/translations.ts
+--- a/src/i18n/translations.ts	2026-10-14 12:11:02.385512944 +0000
++++ b/src/i18n/translations.ts	2026-10-14 12:11:02.392708863 +0000
+@@ -139,6 +139,17 @@
+   'row.unitsOf': '{n} units',
+   'row.hoursOf': '{n} hours per day',
+   'row.remove': 'Remove {n}',
++  'row.name': 'Device name',
++  'row.rename': 'Rename {n}',
++  'row.namePh': 'e.g. Electric heater',
++  'row.unnamed': 'New device',
++  'row.watts': 'Power of {n} in watts',
++  'row.valueOf': '{n}, value',
++  'val.number': 'Enter a number.',
++  'val.negative': 'Value cannot be negative.',
++  'val.whole': 'Quantity must be a whole number.',
++  'val.max': 'Maximum is {n}.',
++  'val.hoursMax': 'Hours must be between 0 and 24.',
+ 
+   'res.usage': 'Estimated energy usage',
+   'res.amps': 'Equivalent Amperes / ما يعادل بالأمبير',
+@@ -450,6 +461,17 @@
+   'row.unitsOf': 'عدد {n}',
+   'row.hoursOf': 'ساعات تشغيل {n}',
+   'row.remove': 'إزالة {n}',
++  'row.name': 'اسم الجهاز',
++  'row.rename': 'تغيير اسم {n}',
++  'row.namePh': 'مثلاً: مدفأة كهربائية',
++  'row.unnamed': 'جهاز جديد',
++  'row.watts': 'قدرة {n} بالواط',
++  'row.valueOf': '{n}، القيمة',
++  'val.number': 'أدخل رقماً.',
++  'val.negative': 'لا يمكن أن تكون القيمة سالبة.',
++  'val.whole': 'يجب أن يكون العدد رقماً صحيحاً.',
++  'val.max': 'الحد الأقصى {n}.',
++  'val.hoursMax': 'يجب أن تكون ساعات التشغيل بين 0 و 24.',
+ 
+   'res.usage': 'استهلاك الطاقة التقديري',
+   'res.amps': 'ما يعادل بالأمبير / Equivalent Amperes',
+diff -ruN a/src/sections/CalculatorSection.tsx b/src/sections/CalculatorSection.tsx
+--- a/src/sections/CalculatorSection.tsx	2026-10-14 12:11:02.386675647 +0000
++++ b/src/sections/CalculatorSection.tsx	2026-10-14 12:11:02.393592101 +0000
+@@ -32,25 +32,25 @@
+         }}
+       />
+ 
+-      <div className="container-page section-y relative grid w-full grid-cols-1 items-start gap-12 lg:grid-cols-2 lg:gap-14">
+-        <Reveal className="flex flex-col gap-5 lg:sticky lg:top-24 lg:self-start">
++      <div className="container-page relative grid w-full grid-cols-1 items-start gap-7 py-12 md:py-14 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] lg:grid-rows-[auto_1fr] lg:gap-x-10 lg:gap-y-6 lg:py-16">
++        <Reveal className="flex flex-col gap-3.5 lg:col-start-1 lg:row-start-1">
+           <p className="eyebrow inline-flex w-fit items-center gap-2 rounded-full bg-[var(--brand-subtle)] px-3.5 py-1.5 text-content-brand">
+             <Icon name="zap" size={14} className="shrink-0" />
+             {t('calc.pill')}
+           </p>
+-          <h2 id="calculator-heading" className="text-h1 text-content-on-dark">
++          <h2 id="calculator-heading" className="text-h2 text-content-on-dark">
+             {t('calc.h2a')}
+             <br />
+             {t('calc.h2b')}
+           </h2>
+-          <p className="readable-copy text-body-lg text-content-on-dark-muted">{t('calc.sub')}</p>
+-          <ul className="mt-1 flex flex-col gap-3.5">
++          <p className="readable-copy text-body text-content-on-dark-muted">{t('calc.sub')}</p>
++          <ul className="mt-1 flex flex-col gap-2">
+             {POINTS.map((p) => (
+               <li key={p} className="flex items-start gap-3">
+-                <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-bg-panel-raised text-sage-300 shadow-[0_0_16px_rgba(134,239,172,0.12)]">
+-                  <Icon name="check" size={14} />
++                <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-bg-panel-raised text-sage-300">
++                  <Icon name="check" size={13} />
+                 </span>
+-                <span className="text-body leading-relaxed text-content-on-dark">{t(p)}</span>
++                <span className="text-body-sm text-content-on-dark">{t(p)}</span>
+               </li>
+             ))}
+           </ul>
+diff -ruN a/src/styles/calculator-sky.css b/src/styles/calculator-sky.css
+--- a/src/styles/calculator-sky.css	2026-10-14 12:11:02.387498257 +0000
++++ b/src/styles/calculator-sky.css	2026-10-14 12:11:02.394150822 +0000
+@@ -67,6 +67,16 @@
+   border-color: var(--color-solar-600);
+ }
+ 
++/* Typed calculator fields show the same outline while focused. */
++[data-calc-theme='sky'] .focus-within\:border-line-brand:focus-within {
++  border-color: var(--color-solar-600);
++}
++
++/* Field validation messages: the dark-theme pink is too pale on white. */
++[data-calc-theme='sky'] .text-danger-300 {
++  color: var(--color-danger-600);
++}
++
+ /* ===== Gold text: small labels, links, key figures ===== */
+ [data-calc-theme='sky'] .text-content-brand,
+ [data-calc-theme='sky'] .text-solar-300,

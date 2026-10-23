@@ -1,0 +1,16 @@
+import puppeteer from 'puppeteer-core';
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+const b = await puppeteer.launch({executablePath:'/Applications/Google Chrome.app/Contents/MacOS/Google Chrome', headless:'new'});
+const p = await b.newPage();
+await p.setViewport({width:1080,height:1500});
+await p.evaluateOnNewDocument(()=>localStorage.setItem('utu-lang','ar'));
+const strip=h=>h.replace(/ class="[^"]*"/g,'').replace(/ style="[^"]*"/g,'').replace(/<svg.*?<\/svg>/g,'<svg/>').slice(0,1500);
+await p.goto('http://localhost:5173/#/companies',{waitUntil:'networkidle0'});await sleep(1500);
+console.log('CO', strip(await p.evaluate(()=>document.querySelector('main article, main li, [class*=card]')?.outerHTML||'none')));
+await p.goto('http://localhost:5173/#/reviews',{waitUntil:'networkidle0'});await sleep(1500);
+console.log('RV', strip(await p.evaluate(()=>document.querySelector('main article')?.outerHTML||'none')));
+await p.goto('http://localhost:5173/#/projects',{waitUntil:'networkidle0'});await sleep(1500);
+console.log('PR', strip(await p.evaluate(()=>document.querySelector('main article')?.outerHTML||'none')));
+await p.goto('http://localhost:5173/#/faq',{waitUntil:'networkidle0'});await sleep(1500);
+await p.screenshot({path:'probe-faq.png'});
+await b.close();

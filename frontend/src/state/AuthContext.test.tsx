@@ -1,0 +1,175 @@
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import '@testing-library/jest-dom/vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { api, type AuthResponse, type AuthUser } from '../api/client';
+import { AuthProvider, AUTH_TOKEN_KEY, AUTH_USER_KEY, useAuth } from './AuthContext';
+
+vi.mock('../api/client', () => ({
+  api: {
+    authMe: vi.fn(),
+    authLogin: vi.fn(),
+    authRegisterClient: vi.fn(),
+    authRegisterCompany: vi.fn(),
+  },
+  ApiError: class ApiError extends Error {
+    constructor(message: string, readonly status: number) {
+      super(message);
+    }
+  },
+}));
+
+afterEach(cleanup);
+beforeEach(() => {
+  localStorage.clear();
+  vi.clearAllMocks();
+});
+
+const user: AuthUser = {
+  id: 1,
+  email: 'client@example.com',
+  phone: null,
+  full_name: 'Test Client',
+  role: 'client',
+  is_active: true,
+  is_verified: false,
+  company_id: null,
+  created_at: '2026-01-01T00:00:00Z',
+};
+
+function AuthState() {
+  const { user: currentUser, token, isAuthenticated, isLoading, login } = useAuth();
+  return (
+    <div>
+      <output data-testid="state">{JSON.stringify({ currentUser, token, isAuthenticated, isLoading })}</output>
+      <button onClick={() => void login('client@example.com', 'valid-password')}>Login</button>
+    </div>
+  );
+}
+
+function readState() {
+  return JSON.parse(screen.getByTestId('state').textContent ?? '{}') as {
+    currentUser: AuthUser | null;
+    token: string;
+    isAuthenticated: boolean;
+    isLoading: boolean;
+  };
+}
+
+describe('AuthContext', () => {
+  it('starts unauthenticated without a saved token', () => {
+    render(<AuthProvider><AuthState /></AuthProvider>);
+    expect(readState()).toMatchObject({
+      currentUser: null,
+      token: '',
+      isAuthenticated: false,
+      isLoading: false,
+    });
+  });
+
+  it('loads the profile for a persisted token', async () => {
+    localStorage.setItem(AUTH_TOKEN_KEY, 'saved-jwt');
+    vi.mocked(api.authMe).mockResolvedValue(user);
+
+    render(<AuthProvider><AuthState /></AuthProvider>);
+
+    await waitFor(() => expect(readState()).toMatchObject({
+      currentUser: user,
+      token: 'saved-jwt',
+      isAuthenticated: true,
+      isLoading: false,
+    }));
+    expect(api.authMe).toHaveBeenCalledWith('saved-jwt');
+  });
+
+  it('keeps a saved token when its cached profile cannot be parsed', async () => {
+    localStorage.setItem(AUTH_TOKEN_KEY, 'saved-jwt');
+    localStorage.setItem(AUTH_USER_KEY, '{invalid-json');
+    vi.mocked(api.authMe).mockResolvedValue(user);
+
+    render(<AuthProvider><AuthState /></AuthProvider>);
+
+    await waitFor(() => expect(readState()).toMatchObject({
+      currentUser: user,
+      token: 'saved-jwt',
+      isAuthenticated: true,
+      isLoading: false,
+    }));
+    expect(localStorage.getItem(AUTH_TOKEN_KEY)).toBe('saved-jwt');
+  });
+
+  it('restores the cached user immediately and keeps the session through a transient profile failure', async () => {
+    localStorage.setItem(AUTH_TOKEN_KEY, 'saved-jwt');
+    localStorage.setItem(AUTH_USER_KEY, JSON.stringify({ token: 'saved-jwt', user }));
+    let rejectProfile: (cause: Error) => void = () => {
+      throw new Error('Profile request was not started');
+    };
+    vi.mocked(api.authMe).mockReturnValue(new Promise((_, reject) => {
+      rejectProfile = reject;
+    }));
+
+    render(<AuthProvider><AuthState /></AuthProvider>);
+
+    expect(readState()).toMatchObject({
+      currentUser: user,
+      token: 'saved-jwt',
+      isAuthenticated: true,
+      isLoading: true,
+    });
+
+    rejectProfile(new Error('Network unavailable'));
+
+    await waitFor(() => expect(readState()).toMatchObject({
+      currentUser: user,
+      token: 'saved-jwt',
+      isAuthenticated: true,
+      isLoading: false,
+    }));
+    expect(localStorage.getItem(AUTH_TOKEN_KEY)).toBe('saved-jwt');
+  });
+
+  it('persists the JWT returned by login', async () => {
+    const response: AuthResponse = {
+      access_token: 'new-jwt',
+      token_type: 'bearer',
+      user,
+    };
+    vi.mocked(api.authLogin).mockResolvedValue(response);
+    vi.mocked(api.authMe).mockResolvedValue(user);
+    render(<AuthProvider><AuthState /></AuthProvider>);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Login' }));
+
+    await waitFor(() => expect(readState()).toMatchObject({
+      currentUser: user,
+      token: 'new-jwt',
+      isAuthenticated: true,
+    }));
+    expect(localStorage.getItem(AUTH_TOKEN_KEY)).toBe('new-jwt');
+    expect(localStorage.getItem(AUTH_USER_KEY)).toBe(JSON.stringify({ token: 'new-jwt', user }));
+  });
+
+  it('forgets guest quote requests on this device when signing out', async () => {
+    localStorage.setItem(AUTH_TOKEN_KEY, 'saved-token');
+    localStorage.setItem('utu-request-access', JSON.stringify({ 'UTU-2026-ABCD': 'guest-token' }));
+    localStorage.setItem('utu-quote-requests', JSON.stringify([{ id: 'UTU-2026-ABCD' }]));
+    localStorage.setItem('utu-quote-draft', JSON.stringify({ name: 'Guest' }));
+    localStorage.setItem('utu-quote-step', '2');
+    vi.mocked(api.authMe).mockResolvedValue(user);
+
+    function LogoutButton() {
+      const { logout } = useAuth();
+      return <button onClick={logout}>Logout</button>;
+    }
+    render(<AuthProvider><AuthState /><LogoutButton /></AuthProvider>);
+    await waitFor(() => expect(readState().isAuthenticated).toBe(true));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Logout' }));
+
+    expect(localStorage.getItem(AUTH_TOKEN_KEY)).toBeNull();
+    expect(localStorage.getItem(AUTH_USER_KEY)).toBeNull();
+    expect(localStorage.getItem('utu-request-access')).toBeNull();
+    expect(localStorage.getItem('utu-quote-requests')).toBeNull();
+    expect(localStorage.getItem('utu-quote-draft')).toBeNull();
+    expect(localStorage.getItem('utu-quote-step')).toBeNull();
+  });
+});

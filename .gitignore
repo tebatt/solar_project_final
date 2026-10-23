@@ -1,0 +1,30 @@
+# Dependencies and build output
+node_modules/
+dist/
+.venv/
+venv/
+__pycache__/
+.pytest_cache/
+
+# Local databases and uploads
+*.db
+*.db-journal
+*.sqlite
+*.sqlite3
+uploads/
+
+# Local environment files (commit .env.example only)
+.env
+.env.*
+!.env.example
+
+# OS files
+.DS_Store
+__MACOSX/
+
+# macOS local run
+.venv-mac/
+backend/.jwt_secret
+backend/.seeded_real
+node_modules_windows_backup_*/
+backend.log

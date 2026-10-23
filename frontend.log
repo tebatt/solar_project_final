@@ -1,0 +1,19 @@
+
+> utu-marketplace@0.1.0 dev
+> vite --host 127.0.0.1 --port 5173
+
+
+  VITE v5.4.21  ready in 189 ms
+
+  ➜  Local:   http://127.0.0.1:5173/
+9:48:38 AM [vite] page reload tailwind.config.cjs
+9:48:58 AM [vite] hmr update /src/sections/Projects.tsx, /src/styles/globals.css
+9:49:42 AM [vite] hmr update /src/components/magicui/marquee.tsx, /src/styles/globals.css
+9:51:56 AM [vite] page reload src/sections/Projects.test.tsx
+9:52:06 AM [vite] page reload src/sections/Projects.reducedMotion.test.tsx
+9:59:42 AM [vite] hmr update /src/components/calculator/SolarCalculator.tsx, /src/styles/globals.css
+9:59:42 AM [vite] page reload src/components/calculator/SolarCalculator.test.tsx
+9:59:59 AM [vite] hmr update /src/components/calculator/SolarCalculator.tsx, /src/styles/globals.css
+9:59:59 AM [vite] page reload src/components/calculator/SolarCalculator.test.tsx
+10:02:14 AM [vite] hmr update /src/components/calculator/SolarCalculator.tsx, /src/styles/globals.css
+10:02:14 AM [vite] page reload src/components/calculator/SolarCalculator.test.tsx

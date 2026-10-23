@@ -1,0 +1,61 @@
+import { cleanup, render, screen } from '@testing-library/react';
+import '@testing-library/jest-dom/vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { LanguageProvider } from '../i18n/LanguageProvider';
+import { HomePage } from './HomePage';
+import { CALC_SKY_THEME } from '../theme/experiments';
+
+vi.mock('../components/layout/Header', () => ({ Header: () => null }));
+vi.mock('../components/layout/Footer', () => ({ Footer: () => null }));
+vi.mock('../sections/Hero', () => ({ Hero: () => null }));
+vi.mock('../sections/CalculatorSection', () => ({ CalculatorSection: () => null }));
+vi.mock('../sections/HowItWorks', () => ({ HowItWorks: () => null }));
+vi.mock('../sections/Companies', () => ({ Companies: () => null }));
+vi.mock('../sections/Projects', () => ({ Projects: () => null }));
+vi.mock('../sections/Trust', () => ({ Trust: () => null }));
+vi.mock('../sections/WarrantySection', () => ({ WarrantySection: () => null }));
+vi.mock('../sections/CustomerReviews', () => ({ CustomerReviews: () => null }));
+vi.mock('../sections/FAQSection', () => ({ FAQSection: () => null }));
+
+afterEach(cleanup);
+
+describe('HomePage payment gateway placement', () => {
+  it('renders the gateway showcase inside the landing page content', () => {
+    render(
+      <LanguageProvider>
+        <HomePage />
+      </LanguageProvider>,
+    );
+
+    const heading = screen.getByRole('heading', {
+      name: 'Deposit methods in the demo',
+    });
+    expect(heading.closest('main')).toBeInTheDocument();
+    expect(screen.getAllByRole('listitem')).toHaveLength(3);
+    expect(heading.closest('section')).toHaveClass('section-y');
+    expect(heading.closest('section')).not.toHaveClass('border-y');
+    expect(screen.getAllByTestId('section-transition')).toHaveLength(8);
+    expect(screen.getAllByTestId('section-divider')).toHaveLength(2);
+    for (const divider of screen.getAllByTestId('section-divider')) {
+      expect(divider).toHaveClass('h-px', 'bg-line-subtle');
+      expect(divider.className).not.toMatch(/gradient|shadow|blur/);
+    }
+    expect(screen.getAllByTestId('section-transition')[0]).toHaveClass(
+      'pointer-events-none',
+      'relative',
+      '-my-12',
+      'h-24',
+      'bg-gradient-to-b',
+    );
+    expect(screen.getAllByTestId('section-transition').map((transition) => transition.dataset.tone)).toEqual([
+      CALC_SKY_THEME ? 'dark-to-sky' : 'dark-panels',
+      'dark-to-light',
+      'beige-continuity',
+      'beige-to-subtle',
+      'subtle-to-page',
+      'page-to-beige',
+      'beige-to-page',
+      'light-to-dark',
+    ]);
+  });
+});

@@ -1,0 +1,15 @@
+== Backend ==
+== Frontend ==
+✅ Backend: http://localhost:8000/docs   Frontend: http://localhost:5173
+
+> utu-marketplace@0.1.0 dev
+> vite
+
+
+  VITE v5.4.21  ready in 187 ms
+
+  ➜  Local:   http://localhost:5173/
+  ➜  Network: use --host to expose
+10:18:32 AM [vite] hmr update /src/sections/Hero.tsx, /src/styles/globals.css
+10:44:30 AM [vite] hmr update /src/sections/Hero.tsx, /src/styles/globals.css
+10:44:44 AM [vite] hmr update /src/sections/Hero.tsx, /src/styles/globals.css

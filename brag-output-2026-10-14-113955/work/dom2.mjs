@@ -1,0 +1,13 @@
+import puppeteer from 'puppeteer-core';
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+const b = await puppeteer.launch({executablePath:'/Applications/Google Chrome.app/Contents/MacOS/Google Chrome', headless:'new'});
+const p = await b.newPage();
+await p.setViewport({width:1080,height:1500});
+await p.evaluateOnNewDocument(()=>localStorage.setItem('utu-lang','ar'));
+const strip=h=>h.replace(/ class="[^"]*"/g,'').replace(/ style="[^"]*"/g,'').replace(/<svg.*?<\/svg>/g,'<svg/>').slice(0,1800);
+await p.goto('http://localhost:5173/#/reviews',{waitUntil:'networkidle0'});await sleep(1500);
+console.log(strip(await p.evaluate(()=>{const e=[...document.querySelectorAll('*')].filter(x=>x.children.length>2&&/بيانات توضيحية/.test(x.textContent)).sort((a,b)=>a.textContent.length-b.textContent.length)[0];return e.outerHTML})));
+await p.goto('http://localhost:5173/#/faq',{waitUntil:'networkidle0'});await sleep(1500);
+await p.screenshot({path:'probe-faq.png'});
+console.log(await p.evaluate(()=>[...document.querySelectorAll('h1,h2,h3')].map(h=>h.textContent).join(' | ')));
+await b.close();

@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="ar">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=1080, height=1920">
+<script src="assets/js/gsap.min.js"></script>
+<style>
+@font-face { font-family: "Plex Arabic"; src: url("assets/fonts/plex-ar-700.ttf"); font-weight: 700; }
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html, body { width: 1080px; height: 1920px; background: #0a0e1a; overflow: hidden; }
+#root { position: relative; width: 100%; height: 100%; overflow: hidden; font-family: "Plex Arabic", sans-serif; direction: rtl; background: #0a0e1a; }
+.bg { position: absolute; inset: 0; background: radial-gradient(900px 520px at 50% 6%, rgba(247,181,41,.30), rgba(10,14,26,0) 70%), linear-gradient(180deg, #121830 0%, #0a0e1a 55%); }
+#glow { position: absolute; left: 0; top: 0; width: 1080px; height: 340px; opacity: .45; background: radial-gradient(520px 200px at 50% 70%, rgba(247,181,41,.35), rgba(247,181,41,0) 70%); opacity: .5; }
+.intro, .outro { position: absolute; inset: 0; overflow: hidden; }
+.pic { position: absolute; left: 0; top: 0; width: 1080px; height: 1935px; object-fit: cover; }
+.shade { position: absolute; inset: 0; background: linear-gradient(180deg, rgba(10,14,26,.1) 0%, rgba(10,14,26,.35) 35%, rgba(10,14,26,.92) 70%, rgba(10,14,26,.97) 100%); }
+.vid { position: absolute; left: 0; top: 340px; width: 1080px; height: 1500px; object-fit: cover; background: #0a0e1a; }
+#dip { position: absolute; left: 0; top: 340px; width: 1080px; height: 1500px; background: #0a0e1a; opacity: 0; }
+.title { position: absolute; left: 0; top: 0; width: 1080px; height: 340px; display: flex; align-items: center; justify-content: center; padding: 0 60px; }
+.title span { display: block; text-align: center; color: #fff; font-size: 84px; line-height: 1.35; font-weight: 700; text-shadow: 0 6px 28px rgba(0,0,0,.45); max-width: 960px; }
+.title::after { content: ""; position: absolute; bottom: 38px; left: 50%; margin-left: -70px; width: 140px; height: 8px; border-radius: 4px; background: #f7b529; }
+#t-assist span, #t-assess span { font-size: 70px; }
+.bar { position: absolute; left: 0; top: 1840px; width: 1080px; height: 80px; background: #0a0e1a; display: flex; align-items: center; justify-content: center; gap: 14px; color: #f7b529; font-size: 32px; font-weight: 700; }
+.bar i { display: block; width: 14px; height: 14px; border-radius: 50%; background: #f7b529; }
+.big { position: absolute; left: 0; width: 1080px; top: 1010px; text-align: center; color: #fff; font-size: 112px; line-height: 1.3; font-weight: 700; padding: 0 60px; text-shadow: 0 8px 36px rgba(0,0,0,.6); }
+.sub { position: absolute; left: 0; width: 1080px; top: 1330px; text-align: center; color: #f7b529; font-size: 50px; font-weight: 700; }
+.big::after { content: ""; display: block; margin: 36px auto 0; width: 180px; height: 10px; border-radius: 5px; background: #f7b529; }
+</style>
+</head>
+<body>
+<div id="root" data-composition-id="utu-brag" data-start="0" data-duration="30" data-width="1080" data-height="1920">
+    <div class="bg"></div>
+    <div id="glow"></div>
+
+    <img id="intro-img" class="pic clip" src="assets/utu-3d-final.png" alt="" data-start="0" data-duration="2.12" data-track-index="1">
+
+    <video id="v-home" class="vid" src="assets/clips/home.mp4" muted playsinline data-start="2.12" data-duration="3.2" data-track-index="2"></video>
+    <video id="v-calc" class="vid" src="assets/clips/calc.mp4" muted playsinline data-start="5.32" data-duration="4.0" data-track-index="2"></video>
+    <video id="v-assess" class="vid" src="assets/clips/assess.mp4" muted playsinline data-start="9.32" data-duration="3.0" data-track-index="2"></video>
+    <video id="v-assist" class="vid" src="assets/clips/assist.mp4" muted playsinline data-start="12.32" data-duration="5.0" data-track-index="2"></video>
+    <video id="v-companies" class="vid" src="assets/clips/companies.mp4" muted playsinline data-start="17.32" data-duration="3.0" data-track-index="2"></video>
+    <video id="v-projects" class="vid" src="assets/clips/projects.mp4" muted playsinline data-start="20.32" data-duration="3.0" data-track-index="2"></video>
+    <video id="v-reviews" class="vid" src="assets/clips/reviews.mp4" muted playsinline data-start="23.32" data-duration="2.5" data-track-index="2"></video>
+    <video id="v-support" class="vid" src="assets/clips/support.mp4" muted playsinline data-start="25.82" data-duration="2.0" data-track-index="2"></video>
+    <div id="dip"></div>
+    <div id="bar" class="bar clip" data-start="2.12" data-duration="25.70" data-track-index="4"><i></i><span>أوتو · منصة الطاقة الشمسية</span><i></i></div>
+    <div id="t-home" class="title clip" data-start="2.12" data-duration="3.2" data-track-index="5"><span>طاقتك الشمسية تبدأ من هنا</span></div>
+    <div id="t-calc" class="title clip" data-start="5.32" data-duration="4.0" data-track-index="5"><span>احسب أحمالك بدقة</span></div>
+    <div id="t-assess" class="title clip" data-start="9.32" data-duration="3.0" data-track-index="5"><span>أوتو يقترح منظومتك المثالية</span></div>
+    <div id="t-assist" class="title clip" data-start="12.32" data-duration="5.0" data-track-index="5"><span>عندك سؤال؟ اسأل مساعد أوتو</span></div>
+    <div id="t-companies" class="title clip" data-start="17.32" data-duration="3.0" data-track-index="5"><span>شركات موثّقة تثق بها</span></div>
+    <div id="t-projects" class="title clip" data-start="20.32" data-duration="3.0" data-track-index="5"><span>منظومات حقيقية تعمل الآن</span></div>
+    <div id="t-reviews" class="title clip" data-start="23.32" data-duration="2.5" data-track-index="5"><span>تجارب زبائن حقيقيين</span></div>
+    <div id="t-support" class="title clip" data-start="25.82" data-duration="2.0" data-track-index="5"><span>دعمنا معك في كل خطوة</span></div>
+
+    <img id="outro-img" class="pic clip" src="assets/utu-3d-final.png" alt="" data-start="27.82" data-duration="2.18" data-track-index="6">
+    <div id="outro-shade" class="shade clip" data-start="27.82" data-duration="2.18" data-track-index="7"></div>
+    <div id="outro-big" class="big clip" data-start="27.82" data-duration="2.18" data-track-index="8">ابدأ مع أوتو اليوم</div>
+
+    <audio id="music" src="assets/music/bed.mp3" data-start="0" data-duration="30" data-track-index="20" data-volume="0.55"></audio>
+    <audio id="sfx-home" src="assets/sfx/switch10.ogg" data-start="2.17" data-duration="0.36" data-track-index="10" data-volume="0.3"></audio>
+    <audio id="sfx-calc" src="assets/sfx/switch10.ogg" data-start="5.37" data-duration="0.36" data-track-index="11" data-volume="0.3"></audio>
+    <audio id="sfx-assess" src="assets/sfx/switch10.ogg" data-start="9.37" data-duration="0.36" data-track-index="12" data-volume="0.3"></audio>
+    <audio id="sfx-assist" src="assets/sfx/switch10.ogg" data-start="12.37" data-duration="0.36" data-track-index="13" data-volume="0.3"></audio>
+    <audio id="sfx-companies" src="assets/sfx/switch10.ogg" data-start="17.37" data-duration="0.36" data-track-index="14" data-volume="0.3"></audio>
+    <audio id="sfx-projects" src="assets/sfx/switch10.ogg" data-start="20.37" data-duration="0.36" data-track-index="15" data-volume="0.3"></audio>
+    <audio id="sfx-reviews" src="assets/sfx/switch10.ogg" data-start="23.37" data-duration="0.36" data-track-index="16" data-volume="0.3"></audio>
+    <audio id="sfx-support" src="assets/sfx/switch10.ogg" data-start="25.87" data-duration="0.36" data-track-index="17" data-volume="0.3"></audio>
+</div>
+<script>
+const tl = gsap.timeline({ paused: true });
+const starts = [2.12, 5.32, 9.32, 12.32, 17.32, 20.32, 23.32, 25.82];
+const durs = [3.2, 4.0, 3.0, 5.0, 3.0, 3.0, 2.5, 2.0];
+const ids = ['home', 'calc', 'assess', 'assist', 'companies', 'projects', 'reviews', 'support'];
+// intro: slow push-in on the hero image
+tl.fromTo("#intro-img", { scale: 1.0, transformOrigin: "50% 40%" }, { scale: 1.1, duration: 2.12, ease: "none" }, 0);
+// titles: rise in, hold, fade just before the cut
+ids.forEach((id, k) => {
+  const s = starts[k], d = durs[k];
+  tl.fromTo("#t-" + id + " span", { y: 46, opacity: 0 }, { y: 0, opacity: 1, duration: 0.45, ease: "power3.out" }, s + 0.08);
+  tl.to("#t-" + id + " span", { opacity: 0, duration: 0.2, ease: "power1.in" }, s + d - 0.22);
+});
+// soft dip-to-dark at every cut
+const cuts = starts.concat([27.82]);
+cuts.forEach((c) => {
+  tl.to("#dip", { opacity: 0.85, duration: 0.14, ease: "power1.in" }, c - 0.14);
+  tl.to("#dip", { opacity: 0, duration: 0.3, ease: "power1.out" }, c);
+});
+// beat-grid glow pulse behind the title band (114.8 BPM)
+for (let b = 2.12; b < 27.8; b += 0.5225) {
+  tl.to("#glow", { opacity: 0.8, duration: 0.12, ease: "power2.out", yoyo: true, repeat: 1 }, b);
+} // beat-locked: 2.12s (first scene start on the 2.1246 strong cue)
+// outro: logo push-in, then line rises
+tl.fromTo("#outro-img", { scale: 1.0, transformOrigin: "50% 12%" }, { scale: 1.35, duration: 2.18, ease: "power2.out" }, 27.82);
+tl.fromTo("#outro-big", { y: 50, opacity: 0 }, { y: 0, opacity: 1, duration: 0.5, ease: "power3.out" }, 28.1);
+window.__timelines["utu-brag"] = tl;
+</script>
+</body>
+</html>

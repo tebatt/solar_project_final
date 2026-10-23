@@ -1,0 +1,30 @@
+{
+ "home": {
+  "start": 0.92,
+  "end": 6.94
+ },
+ "flow": {
+  "calc": 1.61,
+  "result": 10.65,
+  "assess": 14.26,
+  "assistant": 16.97,
+  "typing": 22.76,
+  "end": 30.26
+ },
+ "companies": {
+  "start": 5.48,
+  "end": 10.94
+ },
+ "projects": {
+  "start": 5.75,
+  "end": 10.62
+ },
+ "reviews": {
+  "start": 1.71,
+  "end": 6.02
+ },
+ "support": {
+  "start": 2.21,
+  "end": 5.48
+ }
+}

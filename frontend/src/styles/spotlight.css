@@ -1,0 +1,48 @@
+/*
+ * Soft solar-gold spotlight on company cards (see motion/useSpotlight.ts).
+ * Two layers under the card content: a glow on the surface and a brighter
+ * glow on the 1px edge. Both are invisible until the pointer is over the grid.
+ */
+[data-spotlight]::before,
+[data-spotlight]::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  opacity: var(--spot-o, 0);
+  transition: opacity 300ms ease;
+}
+
+/* Surface. */
+[data-spotlight]::before {
+  z-index: 0;
+  background: radial-gradient(
+    320px circle at var(--spot-x, -999px) var(--spot-y, -999px),
+    rgba(251, 191, 36, 0.2),
+    rgba(251, 191, 36, 0.07) 40%,
+    transparent 70%
+  );
+}
+
+/* Edge: the same light, cut down to the border ring. */
+[data-spotlight]::after {
+  z-index: 1;
+  padding: 1px;
+  background: radial-gradient(
+    260px circle at var(--spot-x, -999px) var(--spot-y, -999px),
+    rgba(252, 211, 77, 0.95),
+    rgba(252, 211, 77, 0.3) 45%,
+    transparent 75%
+  );
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
+}
+
+@media (hover: none), (pointer: coarse), (prefers-reduced-motion: reduce) {
+  [data-spotlight]::before,
+  [data-spotlight]::after {
+    display: none;
+  }
+}

@@ -1,0 +1,166 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{--panel-900:#0a0f13;--panel-800:#101a21;--panel-700:#16242d;--panel-600:#1d303b;--panel-500:#294451;--solar-300:#f7c55f;--solar-400:#f2ac2e;--solar-500:#e5920f;--solar-600:#c1740a;--sunset-400:#e5754f;--sunset-300:#ef9a7c;--dusk-500:#4d5c86;--n50:#fdfaf6;--n300:#d5c9b7;--n600:#5f574b;--n900:#17140f;}
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{width:1920px;height:1080px;overflow:hidden;background:var(--panel-900);font-family:Inter,system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+#stage{position:relative;width:1920px;height:1080px;overflow:hidden;background:var(--panel-900)}
+.abs{position:absolute}
+.layer{position:absolute;inset:0}
+.glow{position:absolute;pointer-events:none}
+h1,.h{color:var(--n50);font-weight:700;letter-spacing:-0.025em;line-height:1.05}
+.over{font-size:22px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;color:var(--solar-400)}
+img{display:block}
+.row{position:absolute;width:560px;border-radius:14px;box-shadow:0 30px 60px -30px rgba(0,0,0,.7)}
+.card{position:absolute;width:300px;border-radius:14px}
+</style></head>
+<body><div id="stage">
+  <!-- backgrounds -->
+  <div id="bgCream" class="layer" style="background:var(--n50)"></div>
+  <div id="glowA" class="glow" style="right:-25%;top:-70%;width:1700px;height:1300px;background:radial-gradient(closest-side,rgba(242,172,46,.34) 0%,rgba(212,86,51,.18) 42%,transparent 100%)"></div>
+  <div id="glowB" class="glow" style="left:-30%;top:35%;width:1300px;height:950px;background:radial-gradient(closest-side,rgba(77,92,134,.30) 0%,transparent 100%)"></div>
+
+  <!-- S1 -->
+  <div id="s1" class="layer">
+    <div class="abs" style="left:150px;top:0;height:1080px;display:flex;flex-direction:column;justify-content:center">
+      <div id="s1o" class="over" style="margin-bottom:28px">Smart Energy Calculator</div>
+      <h1 id="s1h" style="font-size:112px">Tell us<br>what you run.</h1>
+    </div>
+    <img id="r0" class="row" src="row-0.png"><img id="r1" class="row" src="row-1.png"><img id="r2" class="row" src="row-2.png"><img id="r3" class="row" src="row-3.png"><img id="r4" class="row" src="row-4.png">
+  </div>
+
+  <!-- S2 -->
+  <div id="s2" class="layer">
+    <div class="abs" style="left:0;right:0;top:170px;text-align:center">
+      <div id="s2o" class="over" style="margin-bottom:22px">Estimated result</div>
+      <h1 id="s2h" style="font-size:104px">We size the system.</h1>
+    </div>
+    <img id="c0" class="card" src="card-0.png"><img id="c1" class="card" src="card-1.png"><img id="c2" class="card" src="card-2.png"><img id="c3" class="card" src="card-3.png"><img id="c4" class="card" src="card-4.png">
+    <div id="s2n" class="abs" style="left:0;right:0;top:880px;text-align:center;font-size:30px;color:var(--n300);font-weight:500">Based on 5.2 peak sun hours · Baghdad</div>
+  </div>
+
+  <!-- S3 -->
+  <div id="s3" class="layer">
+    <div class="abs" style="left:0;right:0;top:92px;text-align:center">
+      <div id="s3o" class="over" style="color:var(--solar-600);margin-bottom:18px">System options</div>
+      <div id="s3h" class="h" style="font-size:84px;color:var(--n900)">Your UTU system assessment</div>
+    </div>
+    <div id="tierWrap" class="abs" style="left:150px;top:330px;width:1620px;transform-origin:50% 40%">
+      <img id="tiers" src="tiers.png" style="width:1620px">
+    </div>
+  </div>
+
+  <!-- S4 -->
+  <div id="s4" class="layer">
+    <div class="abs" style="left:0;right:0;top:150px;text-align:center">
+      <div id="s4o" class="over" style="margin-bottom:22px">Your energy mix</div>
+      <h1 id="s4h" style="font-size:104px">Before and after solar</h1>
+    </div>
+    <img id="m0" class="abs" src="mix-0.png" style="width:780px;left:150px;top:470px;border-radius:20px">
+    <div id="m1w" class="abs" style="width:780px;left:990px;top:470px"><img id="m1" src="mix-1.png" style="width:780px;border-radius:20px;box-shadow:0 0 80px -20px rgba(242,172,46,.45)"></div>
+  </div>
+
+  <!-- S5 -->
+  <div id="s5" class="layer">
+    <div class="abs" style="left:0;right:0;top:300px;display:flex;justify-content:center;align-items:center;gap:44px">
+      <div id="mark" style="position:relative;width:176px;height:176px;border-radius:54px;overflow:hidden;background:linear-gradient(145deg,#1d303b 0%,#0a0f13 100%);box-shadow:0 0 0 2px #294451,0 30px 100px -20px rgba(242,172,46,.45)">
+        <div id="disc" style="position:absolute;left:51px;top:27px;width:74px;height:74px;border-radius:50%;background:linear-gradient(180deg,#f7c55f 0%,#e5754f 100%)"></div>
+        <div id="bar1" style="position:absolute;left:32px;top:115px;width:112px;height:15px;border-radius:5px;background:#f2ac2e;transform-origin:50% 50%"></div>
+        <div id="bar2" style="position:absolute;left:49px;top:139px;width:78px;height:15px;border-radius:5px;background:rgba(242,172,46,.45);transform-origin:50% 50%"></div>
+      </div>
+      <div id="word" style="font-size:168px;font-weight:600;letter-spacing:.015em;color:var(--n50);line-height:1">Utu</div>
+    </div>
+    <div id="tag" class="abs" style="left:0;right:0;top:580px;text-align:center;font-size:52px;font-weight:600;color:var(--n50);letter-spacing:-.015em">The verified marketplace for solar energy in Iraq</div>
+    <div id="tag2" class="abs" style="left:0;right:0;top:672px;text-align:center;font-size:32px;color:var(--n300);font-weight:500">Calculate what you need, then compare companies that have actually built it.</div>
+  </div>
+</div>
+<script>
+const $=id=>document.getElementById(id);
+const clamp=(x,a=0,b=1)=>Math.max(a,Math.min(b,x));
+const outCubic=x=>1-Math.pow(1-x,3);
+const outQuint=x=>1-Math.pow(1-x,5);
+const inOut=x=>x<.5?4*x*x*x:1-Math.pow(-2*x+2,3)/2;
+const p=(t,a,d)=>clamp((t-a)/d);
+// element enter/exit: fade + rise in, fade + lift out
+function show(el,t,inAt,outAt,{dy=36,din=.6,dout=.4,scale=0}={}){
+  const i=outQuint(p(t,inAt,din)), o=outAt==null?0:inOut(p(t,outAt,dout));
+  const y=(1-i)*dy - o*dy*.6;
+  const s=1+(1-i)*scale;
+  el.style.opacity=(i*(1-o)).toFixed(4);
+  el.style.transform=`translateY(${y.toFixed(2)}px) scale(${s.toFixed(4)})`;
+}
+function vis(id,t,a,b){ $(id).style.display=(t>=a&&t<b)?'block':'none'; }
+
+window.render=function(t){
+  // backgrounds: dark everywhere except S3 (cream), dipped smoothly
+  const cream = inOut(p(t,8.25,.5))*(1-inOut(p(t,12.75,.5)));
+  $('bgCream').style.opacity=cream;
+  const drift=Math.sin(t*0.35)*30;
+  $('glowA').style.opacity=(1-cream)*(t<17?1:0.85+0.15*inOut(p(t,17,1)));
+  $('glowA').style.transform=`translate(${drift}px,${t*6}px)`;
+  $('glowB').style.opacity=(1-cream);
+  $('glowB').style.transform=`translate(${-drift}px,0)`;
+
+  // S1 0–4
+  vis('s1',t,0,4.3);
+  show($('s1o'),t,0.0,3.6,{din:.5});
+  show($('s1h'),t,0.05,3.65,{din:.55});
+  const rowsTop=[100,290,480,670,860];
+  for(let k=0;k<5;k++){
+    const el=$('r'+k); el.style.left='1210px'; el.style.top=(rowsTop[k]-30)+'px';
+    // rows heights 1060x324@2x → 560 wide = 171 tall
+    show(el,t,0.35+k*0.28,3.5+k*0.05,{dy:60,din:.7});
+  }
+  // S2 4–8.5
+  vis('s2',t,4,8.9);
+  show($('s2o'),t,4.1,8.05);
+  show($('s2h'),t,4.15,8.1);
+  const cx=[120,460,800,1140,1480];
+  for(let k=0;k<5;k++){
+    const el=$('c'+k); el.style.left=(cx[k]+10)+'px'; el.style.top='520px';
+    show(el,t,4.75+k*0.18,7.95+k*0.03,{dy:50,din:.7});
+  }
+  // highlight 6.9 kWp card
+  const hl=inOut(p(t,6.4,.6))*(1-inOut(p(t,7.95,.4)));
+  const c2=$('c2'); c2.style.transform+=` translateY(${-hl*22}px) scale(${1+hl*0.1})`;
+  c2.style.boxShadow=`0 0 ${hl*90}px ${-10+hl*0}px rgba(242,172,46,${(hl*0.55).toFixed(3)})`;
+  for(const k of [0,1,3,4]) $('c'+k).style.opacity=(+$('c'+k).style.opacity*(1-hl*0.45)).toFixed(3);
+  show($('s2n'),t,5.9,7.9);
+
+  // S3 8.5–13
+  vis('s3',t,8.5,13.2);
+  show($('s3o'),t,8.65,12.55);
+  show($('s3h'),t,8.7,12.6);
+  const tw=$('tierWrap');
+  const ti=outQuint(p(t,9.0,.8)), to=inOut(p(t,12.6,.4));
+  const push=1+0.11*inOut(p(t,9.6,3.0));
+  tw.style.opacity=(ti*(1-to)).toFixed(3);
+  tw.style.transform=`translateY(${(1-ti)*60 - to*30 + (push-1)*-180}px) scale(${push})`;
+
+  // S4 13–17
+  vis('s4',t,13,17.3);
+  show($('s4o'),t,13.15,16.6);
+  show($('s4h'),t,13.2,16.65);
+  show($('m0'),t,13.7,16.55,{dy:50,din:.7});
+  const m1=$('m1w'); show(m1,t,14.6,16.6,{dy:50,din:.7});
+  const wipe=outCubic(p(t,14.6,0.9));
+  $('m1').style.clipPath=`inset(0 ${(100-wipe*100).toFixed(2)}% 0 0 round 20px)`;
+
+  // S5 17–21
+  vis('s5',t,17,22);
+  const mk=outQuint(p(t,17.2,.8));
+  $('mark').style.opacity=mk; $('mark').style.transform=`scale(${0.85+0.15*mk})`;
+  const rise=outCubic(p(t,17.45,1.1));
+  $('disc').style.transform=`translateY(${(1-rise)*70}px)`;
+  $('bar1').style.transform=`scaleX(${outCubic(p(t,17.35,.6))})`;
+  $('bar2').style.transform=`scaleX(${outCubic(p(t,17.5,.6))})`;
+  const w=outQuint(p(t,17.6,.8));
+  $('word').style.opacity=w; $('word').style.transform=`translateX(${(1-w)*-30}px)`;
+  show($('tag'),t,18.2,null,{din:.7});
+  show($('tag2'),t,18.6,null,{din:.7});
+  // final gentle fade to black
+  $('stage').style.filter=`brightness(${1-inOut(p(t,20.4,.6))})`;
+};
+window.render(0);
+</script></body></html>

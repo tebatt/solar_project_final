@@ -1,0 +1,282 @@
+import seed as seed_module
+import pytest
+from sqlalchemy.exc import IntegrityError
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
+from sqlmodel import Session, SQLModel, create_engine, select
+from sqlmodel.pool import StaticPool
+
+from database import get_session
+from models import Company, Project, Review, User
+from projects import router
+from security import create_access_token
+
+
+def _admin_headers(session, monkeypatch):
+    """Admin actions need a signed-in admin account; the shared token is gone."""
+    monkeypatch.setenv("JWT_SECRET_KEY", "project-test-secret-key-that-is-long-enough")
+    admin = User(
+        email="project-admin@example.com",
+        hashed_password="not-used",
+        full_name="Project Admin",
+        role="admin",
+        is_active=True,
+    )
+    session.add(admin)
+    session.commit()
+    session.refresh(admin)
+    return {"Authorization": f"Bearer {create_access_token(admin)}"}
+
+
+@pytest.fixture
+def project_api():
+    engine = create_engine(
+        "sqlite://",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+    SQLModel.metadata.create_all(engine)
+    session = Session(engine)
+    company = Company(
+        name="Rafidain Solar Systems",
+        logo_url="/projects/rafidain-logo.png",
+        founded_year=2015,
+        projects_count=120,
+        phone="07700000000",
+        verification_status="verified",
+    )
+    session.add(company)
+    session.commit()
+    session.refresh(company)
+    project = Project(
+        title="Residential Solar System",
+        description="A rooftop solar installation in Baghdad.",
+        company_id=company.id,
+        location_governorate="Baghdad",
+        location_district="Al-Jadriya",
+        system_kwp=8.4,
+        battery_kwh=0,
+        installation_type="On-grid rooftop",
+        image_url="/projects/residential-baghdad.jpg",
+        gallery_urls_json='["/projects/residential-baghdad.jpg"]',
+        status="in_progress",
+    )
+    session.add(project)
+    session.commit()
+    session.refresh(project)
+
+    app = FastAPI()
+    app.include_router(router)
+
+    def override_session():
+        yield session
+
+    app.dependency_overrides[get_session] = override_session
+    client = TestClient(app)
+    yield client, session, company, project
+    client.close()
+    session.close()
+    engine.dispose()
+
+
+def test_list_and_detail_include_company_and_gallery(project_api):
+    client, _, _, project = project_api
+    response = client.get("/api/projects?status=in_progress")
+    assert response.status_code == 200
+    item = response.json()[0]
+    assert item["title"] == "Residential Solar System"
+    assert item["company"]["name"] == "Rafidain Solar Systems"
+    assert item["gallery_urls"] == ["/projects/residential-baghdad.jpg"]
+
+    detail = client.get(f"/api/projects/{project.id}")
+    assert detail.status_code == 200
+    assert detail.json()["location_district"] == "Al-Jadriya"
+    assert detail.json()["company"]["verification_status"] == "verified"
+
+
+def test_pending_demo_project_exposes_budget_milestones_and_metrics(project_api):
+    client, session, _, project = project_api
+    project.status = "pending"
+    project.budget_iqd = 9_200_000
+    project.milestones_json = '["Quote prepared", "Customer approval pending"]'
+    project.before_metrics_json = '{"grid_supply":"8 hours/day"}'
+    project.after_metrics_json = "{}"
+    session.add(project)
+    session.commit()
+
+    response = client.get("/api/projects?status=pending")
+
+    assert response.status_code == 200
+    item = response.json()[0]
+    assert item["budget_iqd"] == 9_200_000
+    assert item["milestones"] == ["Quote prepared", "Customer approval pending"]
+    assert item["before_metrics"] == {"grid_supply": "8 hours/day"}
+    assert item["after_metrics"] == {}
+
+
+def test_completed_projects_feed_returns_older_projects_after_new_ones(project_api):
+    client, session, company, _ = project_api
+    projects = []
+    for index in range(5):
+        project = Project(
+            title=f"Completed installation {index}",
+            company_id=company.id,
+            location_governorate="Baghdad",
+            location_district=f"District {index}",
+            system_kwp=5 + index,
+            installation_type="Hybrid",
+            image_url="",
+            status="completed",
+        )
+        session.add(project)
+        projects.append(project)
+    session.commit()
+
+    response = client.get("/api/projects?status=completed")
+
+    assert response.status_code == 200
+    returned_ids = [item["id"] for item in response.json()]
+    assert len(returned_ids) == 5
+    assert set(returned_ids) == {project.id for project in projects}
+
+
+def test_admin_can_complete_project_and_completed_feed_includes_it(project_api, monkeypatch):
+    client, session, _, project = project_api
+    updated = client.patch(
+        f"/api/projects/{project.id}/status",
+        headers=_admin_headers(session, monkeypatch),
+        json={"status": "completed"},
+    )
+    assert updated.status_code == 200
+    assert updated.json()["completed_at"] is not None
+    feed = client.get("/api/projects?status=completed")
+    assert feed.status_code == 200
+    assert [item["id"] for item in feed.json()] == [project.id]
+
+
+def test_project_status_update_requires_an_admin_account(project_api, monkeypatch):
+    client, _, _, project = project_api
+    monkeypatch.setenv("UTU_ADMIN_TOKEN", "old-shared-admin-token")
+    anonymous = client.patch(
+        f"/api/projects/{project.id}/status",
+        json={"status": "completed"},
+    )
+    assert anonymous.status_code == 401
+    shared_token = client.patch(
+        f"/api/projects/{project.id}/status",
+        headers={"X-Admin-Token": "old-shared-admin-token"},
+        json={"status": "completed"},
+    )
+    assert shared_token.status_code == 401
+
+
+def test_admin_can_create_completed_project_with_gallery(project_api, monkeypatch):
+    client, session, company, _ = project_api
+    payload = {
+        "title": "New completed installation",
+        "company_id": company.id,
+        "location_governorate": "Baghdad",
+        "location_district": "Al-Mansour",
+        "system_kwp": 10,
+        "installation_type": "Hybrid",
+        "image_url": "/projects/new-installation.jpg",
+        "gallery_urls": ["/projects/new-installation-detail.jpg"],
+    }
+    response = client.post(
+        "/api/projects",
+        headers=_admin_headers(session, monkeypatch),
+        json=payload,
+    )
+    assert response.status_code == 201
+    assert response.json()["gallery_urls"] == payload["gallery_urls"]
+    assert response.json()["completed_at"] is not None
+
+
+def test_project_status_patch_preflight_allows_web_origin():
+    from fastapi.testclient import TestClient
+    from main import app
+
+    response = TestClient(app).options(
+        "/api/projects/1/status",
+        headers={
+            "Origin": "http://127.0.0.1:5173",
+            "Access-Control-Request-Method": "PATCH",
+            "Access-Control-Request-Headers": "x-admin-token,content-type",
+        },
+    )
+    assert response.status_code == 200
+    assert "PATCH" in response.headers["access-control-allow-methods"]
+
+
+def test_sqlite_enforces_project_company_foreign_key(project_api):
+    _, session, _, _ = project_api
+    session.add(Project(
+        title="Orphan project",
+        company_id=9999,
+        location_governorate="Baghdad",
+        location_district="Invalid",
+        system_kwp=1,
+        installation_type="Hybrid",
+        image_url="/projects/orphan.jpg",
+    ))
+
+    with pytest.raises(IntegrityError):
+        session.commit()
+    session.rollback()
+
+
+def test_unhandled_api_errors_return_structured_json():
+    from main import unhandled_exception_handler
+
+    app = FastAPI()
+    app.add_exception_handler(Exception, unhandled_exception_handler)
+
+    @app.get("/unexpected")
+    def unexpected():
+        raise RuntimeError("internal details must not be exposed")
+
+    response = TestClient(app, raise_server_exceptions=False).get("/unexpected")
+
+    assert response.status_code == 500
+    assert response.json() == {"detail": "Internal server error"}
+
+
+def test_seed_adds_demo_companies_and_projects_idempotently_without_fake_verification(monkeypatch):
+    engine = create_engine(
+        "sqlite://",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+
+    def create_test_tables():
+        SQLModel.metadata.create_all(engine)
+
+    monkeypatch.setattr(seed_module, "DEMO_PASSWORD", "test-demo-password")
+    monkeypatch.setattr(seed_module, "engine", engine)
+    monkeypatch.setattr(seed_module, "create_db_and_tables", create_test_tables)
+    seed_module.seed_companies()
+    seed_module.seed_companies()
+
+    with Session(engine) as session:
+        companies = session.exec(select(Company)).all()
+        projects = session.exec(select(Project)).all()
+        reviews = session.exec(select(Review)).all()
+        customers = session.exec(
+            select(User).where(User.demo_key.like("utu-seed-customer-%"))
+        ).all()
+    engine.dispose()
+
+    assert len(companies) == 10
+    assert len(projects) == 10
+    assert len(reviews) == 0
+    assert len(customers) == 10
+    assert {project.status for project in projects} == {"completed", "in_progress", "pending", "draft"}
+    assert sum(project.status == "completed" for project in projects) == 3
+    assert sum(project.status == "in_progress" for project in projects) == 4
+    assert sum(project.status in {"pending", "draft"} for project in projects) == 3
+    assert all(company.verification_status == "pending" for company in companies)
+    assert all(company.service_offerings for company in companies)
+    assert all(project.budget_iqd and project.customer_user_id for project in projects)
+    completed = [project for project in projects if project.status == "completed"]
+    assert all(project.completed_at and project.before_metrics_json != "{}" and project.after_metrics_json != "{}" for project in completed)
+    assert all(project.milestones_json != "[]" for project in projects)

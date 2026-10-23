@@ -1,0 +1,142 @@
+/**
+ * Calculator "sky" theme experiment.
+ * ---------------------------------------------------------------------------
+ * Every rule is scoped under [data-calc-theme='sky'], an attribute that is
+ * only rendered while CALC_SKY_THEME (src/theme/experiments.ts) is true, so
+ * this file is inert when the flag is off. Delete this file, its import in
+ * CalculatorSection.tsx and the flag references to remove the experiment.
+ *
+ * The calculator components keep their original dark-theme classes. Here the
+ * dark-surface tokens they read are remapped locally (never on :root), and
+ * the few hard-coded palette utilities they use are re-pointed at existing
+ * brand tokens.
+ */
+
+/* ===== Section background + locally remapped dark-surface tokens ===== */
+section[data-calc-theme='sky'] {
+  background: linear-gradient(180deg, #d9e6f2 0%, #eef3f7 55%, #fdfaf6 100%);
+}
+
+[data-calc-theme='sky'] {
+  --text-on-dark: var(--text-primary);
+  --text-on-dark-muted: var(--text-secondary);
+  --border-on-dark: rgba(23, 20, 15, 0.12);
+  /* Inactive rows / empty state, and raised controls / active row. */
+  --bg-panel-deep: var(--color-neutral-50);
+  --bg-panel-raised: var(--color-neutral-100);
+}
+
+/* Decorative warm glow: kept, but softened so it does not muddy the sky. */
+section[data-calc-theme='sky'] > .pointer-events-none.absolute {
+  opacity: 0.45;
+}
+
+/* ===== Cards (appliance panel + results panel) ===== */
+[data-calc-theme='sky'] .bg-bg-inverse,
+[data-calc-theme='sky'] .bg-slate-900\/60 {
+  background: rgba(255, 255, 255, 0.88);
+  border: 1px solid rgba(255, 255, 255, 0.9);
+  box-shadow:
+    0 24px 48px -24px rgba(27, 43, 60, 0.35),
+    0 1px 0 rgba(255, 255, 255, 0.6) inset;
+}
+
+/* The results panel shipped with a blur for the dark glass look. Over a
+   smooth gradient it adds cost without a visible effect, so it is dropped;
+   the 0.88 white fill is the fallback-safe look in every browser. */
+[data-calc-theme='sky'] .bg-slate-900\/60 {
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+/* ===== Borders ===== */
+[data-calc-theme='sky'] .hover\:border-panel-400:hover,
+[data-calc-theme='sky'] .hover\:border-amber-200\/50:hover {
+  border-color: rgba(23, 20, 15, 0.22);
+}
+
+/* Stepper outline is the field boundary, so it must clear 3:1 (WCAG 1.4.11):
+   0.5 renders #8b8780-ish, 3.38:1 on its own fill, 3.62:1 on the row. */
+[data-calc-theme='sky'] .rounded-\[9px\].border-line-on-dark {
+  border-color: rgba(23, 20, 15, 0.5);
+}
+
+/* Selected row + emphasised result: the brand outline, darkened so the
+   selected state clears 3:1 against the light surfaces. */
+[data-calc-theme='sky'] .border-line-brand {
+  border-color: var(--color-solar-600);
+}
+
+/* Typed calculator fields show the same outline while focused. */
+[data-calc-theme='sky'] .focus-within\:border-line-brand:focus-within {
+  border-color: var(--color-solar-600);
+}
+
+/* Field validation messages: the dark-theme pink is too pale on white. */
+[data-calc-theme='sky'] .text-danger-300 {
+  color: var(--color-danger-600);
+}
+
+/* ===== Gold text: small labels, links, key figures ===== */
+[data-calc-theme='sky'] .text-content-brand,
+[data-calc-theme='sky'] .text-solar-300,
+[data-calc-theme='sky'] .text-amber-200 {
+  color: var(--color-solar-700);
+}
+
+/* Inactive appliance and result icons. */
+[data-calc-theme='sky'] .text-dusk-200 {
+  color: var(--text-secondary);
+}
+
+/* "Why it works" check marks. */
+[data-calc-theme='sky'] .text-sage-300 {
+  color: var(--color-sage-600);
+  box-shadow: none;
+}
+
+/* ===== Amber pill buttons (demo values, direct request) + choice banner ===== */
+[data-calc-theme='sky'] .bg-amber-400\/10 {
+  background-color: var(--brand-subtle);
+  border-color: rgba(150, 87, 12, 0.35);
+}
+
+[data-calc-theme='sky'] .hover\:bg-amber-400\/20:hover {
+  background-color: var(--color-solar-100);
+}
+
+[data-calc-theme='sky'] .hover\:border-amber-200\/70:hover {
+  border-color: rgba(150, 87, 12, 0.6);
+}
+
+[data-calc-theme='sky'] .text-amber-100 {
+  color: var(--text-primary);
+}
+
+/* Voice-guide buttons */
+[data-calc-theme='sky'] .border-amber-400\/50 {
+  border-color: rgba(150, 87, 12, 0.45);
+}
+
+[data-calc-theme='sky'] .hover\:bg-slate-950\/50:hover {
+  background-color: var(--brand-subtle);
+}
+
+/* ===== Focus: the dark-theme solar ring is too pale on light surfaces ===== */
+[data-calc-theme='sky'] .on-dark :focus-visible,
+[data-calc-theme='sky'] :focus-visible {
+  outline-color: var(--focus-ring);
+}
+
+/* ===== Section transitions around the calculator (HomePage.tsx) ===== */
+/* Fully opaque: a translucent mid-stop would expose the light section
+   underneath at the boundary and show a seam. Measured endpoints: hero
+   bottom renders #0a0f13, the sky gradient starts at #d9e6f2. */
+[data-calc-theme='sky'].calc-sky-transition--dark-to-sky {
+  background-image: linear-gradient(
+    180deg,
+    #0a0f13 0%,
+    #0a0f13 8%,
+    #d9e6f2 100%
+  );
+}
